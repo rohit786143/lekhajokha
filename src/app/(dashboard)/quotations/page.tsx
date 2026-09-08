@@ -1,0 +1,602 @@
+"use client";
+
+import React, { useState } from "react";
+import Link from "next/link";
+import { usePosStore } from "@/lib/pos-store";
+import { useTenantData } from "@/lib/use-tenant-data";
+import { formatCurrency } from "@/lib/tax-engine";
+import { Quotation, QuotationItem, QuotationStatus } from "@/lib/types";
+import {
+  FileText,
+  Plus,
+  Search,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  Printer,
+  X,
+  Building2,
+  Send,
+  Trash2,
+  Zap,
+} from "lucide-react";
+
+export default function QuotationsPage() {
+  const { tenant, addQuotation, updateQuotation, convertQuotationToInvoice } = usePosStore();
+  const {
+    quotations,
+    parties,
+    products,
+  } = useTenantData();
+  const tenantQuotations = quotations;
+  const tenantParties = parties;
+  const tenantProducts = products;
+
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
+  const [conversionSuccessMsg, setConversionSuccessMsg] = useState<string | null>(null);
+
+  // New quotation form state
+  const [partyId, setPartyId] = useState<string>(tenantParties[0]?.id || "");
+  const [quoteNo, setQuoteNo] = useState<string>(`EST-${Date.now().toString().slice(-5)}`);
+  const [validDays, setValidDays] = useState<number>(15);
+  const [quoteItems, setQuoteItems] = useState<
+    {
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      discountPercent: number;
+      taxRate: number;
+    }[]
+  >([
+    {
+      productId: tenantProducts[0]?.id || "",
+      quantity: 1,
+      unitPrice: tenantProducts[0]?.salePrice || 100,
+      discountPercent: 0,
+      taxRate: tenantProducts[0]?.taxRate || 18,
+    },
+  ]);
+
+  const filteredQuotations = tenantQuotations.filter((q) => {
+    const matchStatus = statusFilter === "ALL" || q.status === statusFilter;
+    const matchSearch =
+      !searchQuery ||
+      q.quoteNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (q.partyName && q.partyName.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchStatus && matchSearch;
+  });
+
+  const handleAddItem = () => {
+    const defaultP = tenantProducts[0];
+    setQuoteItems([
+      ...quoteItems,
+      {
+        productId: defaultP?.id || "",
+        quantity: 1,
+        unitPrice: defaultP?.salePrice || 100,
+        discountPercent: 0,
+        taxRate: defaultP?.taxRate || 18,
+      },
+    ]);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (quoteItems.length === 1) return;
+    setQuoteItems(quoteItems.filter((_, i) => i !== index));
+  };
+
+  const handleItemChange = (index: number, field: string, value: any) => {
+    const newItems = [...quoteItems];
+    if (field === "productId") {
+      const prod = products.find((p) => p.id === value);
+      newItems[index] = {
+        ...newItems[index],
+        productId: value,
+        unitPrice: prod?.salePrice || 0,
+        taxRate: prod?.taxRate || 18,
+      };
+    } else {
+      newItems[index] = { ...newItems[index], [field]: value };
+    }
+    setQuoteItems(newItems);
+  };
+
+  const handleCreateQuotation = (e: React.FormEvent) => {
+    e.preventDefault();
+    const selParty = parties.find((p) => p.id === partyId);
+
+    let subtotal = 0;
+    let discountTotal = 0;
+    let taxAmount = 0;
+
+    const calculatedItems: QuotationItem[] = quoteItems.map((item, idx) => {
+      const prod = products.find((p) => p.id === item.productId);
+      const base = item.quantity * item.unitPrice;
+      const disc = base * (item.discountPercent / 100);
+      const taxable = Math.max(0, base - disc);
+      const tax = taxable * (item.taxRate / 100);
+      const total = taxable + tax;
+
+      subtotal += base;
+      discountTotal += disc;
+      taxAmount += tax;
+
+      return {
+        id: `q-item-${Date.now()}-${idx}`,
+        productId: item.productId,
+        productName: prod?.name || "Product",
+        sku: prod?.sku || "SKU",
+        hsn: prod?.hsn || "9999",
+        unit: prod?.unit || "PCS",
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountPercent: item.discountPercent,
+        discountAmount: disc,
+        taxRate: item.taxRate,
+        taxableAmount: taxable,
+        taxAmount: tax,
+        total,
+      };
+    });
+
+    const taxableAmount = subtotal - discountTotal;
+    const rawGrandTotal = taxableAmount + taxAmount;
+    const grandTotal = Math.round(rawGrandTotal);
+    const roundOff = grandTotal - rawGrandTotal;
+
+    const validUntilDate = new Date();
+    validUntilDate.setDate(validUntilDate.getDate() + validDays);
+
+    const newQuotation: Quotation = {
+      id: `quote-${Date.now()}`,
+      tenantId: tenant.id,
+      partyId,
+      partyName: selParty?.name || "Customer",
+      partyGstin: selParty?.gstin,
+      partyPhone: selParty?.phone,
+      quoteNo,
+      quoteDate: new Date().toISOString(),
+      validUntil: validUntilDate.toISOString().split("T")[0],
+      subtotal,
+      discountTotal,
+      taxableAmount,
+      taxAmount,
+      roundOff,
+      grandTotal,
+      status: "DRAFT",
+      items: calculatedItems,
+      createdAt: new Date().toISOString(),
+    };
+
+    addQuotation(newQuotation);
+    setIsCreateModalOpen(false);
+    setQuoteNo(`EST-${Date.now().toString().slice(-5)}`);
+  };
+
+  const handleConvert = (quote: Quotation) => {
+    if (quote.status === "CONVERTED_TO_INVOICE") {
+      alert("This quotation is already converted into an active invoice!");
+      return;
+    }
+
+    const createdInv = convertQuotationToInvoice(quote.id);
+    if (createdInv) {
+      setConversionSuccessMsg(
+        `Quotation ${quote.quoteNo} converted to Tax Invoice #${createdInv.invoiceNo}! Stock decremented.`
+      );
+      if (previewQuotation?.id === quote.id) {
+        setPreviewQuotation({
+          ...quote,
+          status: "CONVERTED_TO_INVOICE",
+          convertedInvoiceId: createdInv.id,
+        });
+      }
+      setTimeout(() => setConversionSuccessMsg(null), 5000);
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6 max-w-7xl mx-auto font-sans">
+      {/* Toast alert */}
+      {conversionSuccessMsg && (
+        <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <CheckCircle2 className="w-5 h-5 text-emerald-200" />
+          <div className="text-xs font-bold">{conversionSuccessMsg}</div>
+        </div>
+      )}
+
+      {/* Header Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-3xl shadow-xl">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-wider border border-indigo-400/30">
+              Pre-Sales & Estimates
+            </span>
+            <span className="text-xs text-slate-300">GST: {tenant.gstin}</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-black tracking-tight">
+            Quotations & Estimates
+          </h1>
+          <p className="text-xs text-slate-400">
+            Generate formal price estimates for customers. Stock is only deducted upon 1-click invoice conversion.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsCreateModalOpen(true)}
+          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-indigo-600/30 transition self-start md:self-auto"
+        >
+          <Plus className="w-4 h-4" />
+          <span>+ Create Quotation</span>
+        </button>
+      </div>
+
+      {/* Main Quotations Card */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by estimate number or party..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {["ALL", "DRAFT", "SENT", "ACCEPTED", "CONVERTED_TO_INVOICE"].map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => setStatusFilter(st)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                  statusFilter === st
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200"
+                }`}
+              >
+                {st === "CONVERTED_TO_INVOICE" ? "CONVERTED" : st}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          {filteredQuotations.length === 0 ? (
+            <div className="py-16 text-center space-y-3 bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 mx-auto">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">
+                  No Quotations Found
+                </h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Create formal price proposals and estimates for clients with 1-click conversion to GST Tax Invoices.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Quotation</span>
+              </button>
+            </div>
+          ) : (
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-bold border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="p-3">Estimate No</th>
+                  <th className="p-3">Party / Customer</th>
+                  <th className="p-3">Date</th>
+                  <th className="p-3">Valid Until</th>
+                  <th className="p-3 text-right">Grand Total</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-center">1-Click Conversion</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                {filteredQuotations.map((q) => (
+                  <tr
+                    key={q.id}
+                    onClick={() => setPreviewQuotation(q)}
+                    className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition cursor-pointer"
+                  >
+                    <td className="p-3 font-mono font-bold text-indigo-600">{q.quoteNo}</td>
+                    <td className="p-3 font-semibold text-slate-900 dark:text-white">
+                      {q.partyName || "Customer"}
+                    </td>
+                    <td className="p-3 text-slate-500">
+                      {new Date(q.quoteDate).toLocaleDateString("en-IN")}
+                    </td>
+                    <td className="p-3 text-slate-500">{q.validUntil || "-"}</td>
+                    <td className="p-3 text-right font-mono font-black text-slate-900 dark:text-white">
+                      {formatCurrency(q.grandTotal)}
+                    </td>
+                    <td className="p-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                          q.status === "CONVERTED_TO_INVOICE"
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                            : q.status === "ACCEPTED"
+                            ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300"
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                        }`}
+                      >
+                        {q.status === "CONVERTED_TO_INVOICE" ? "CONVERTED" : q.status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      {q.status === "CONVERTED_TO_INVOICE" ? (
+                        <span className="text-[11px] font-bold text-emerald-600 flex items-center justify-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Billed</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleConvert(q)}
+                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-[11px] rounded-xl shadow-md shadow-emerald-600/20 active:scale-95 transition flex items-center justify-center gap-1.5 mx-auto"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>Convert to Invoice</span>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Create Quotation Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                Create New Quotation / Estimate
+              </h3>
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateQuotation} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Customer / Party
+                  </label>
+                  <select
+                    value={partyId}
+                    onChange={(e) => setPartyId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
+                  >
+                    {tenantParties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Estimate No
+                  </label>
+                  <input
+                    type="text"
+                    value={quoteNo}
+                    onChange={(e) => setQuoteNo(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Quoted Products & Pricing
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddItem}
+                    className="text-xs font-bold text-indigo-600 hover:underline"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-[260px] overflow-y-auto">
+                  {quoteItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-800 grid grid-cols-12 gap-2 items-center text-xs"
+                    >
+                      <div className="col-span-5">
+                        <select
+                          value={item.productId}
+                          onChange={(e) => handleItemChange(idx, "productId", e.target.value)}
+                          className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold"
+                        >
+                          {tenantProducts.length === 0 ? (
+                            <option value="">No products in inventory</option>
+                          ) : (
+                            tenantProducts.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Qty"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            handleItemChange(idx, "quantity", Math.max(1, Number(e.target.value)))
+                          }
+                          className="w-full p-2 text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-bold font-mono"
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Rate"
+                          value={item.unitPrice}
+                          onChange={(e) =>
+                            handleItemChange(idx, "unitPrice", Number(e.target.value))
+                          }
+                          className="w-full p-2 text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono font-bold"
+                        />
+                      </div>
+
+                      <div className="col-span-2 text-right font-mono font-black text-indigo-600">
+                        {formatCurrency(item.quantity * item.unitPrice * (1 + item.taxRate / 100))}
+                      </div>
+
+                      <div className="col-span-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(idx)}
+                          disabled={quoteItems.length === 1}
+                          className="p-1 text-slate-400 hover:text-rose-500 disabled:opacity-30"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl shadow-md"
+                >
+                  Save Quotation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewQuotation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div>
+                <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
+                  Estimate / Quotation
+                </span>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                  {previewQuotation.quoteNo}
+                </h3>
+              </div>
+              <button
+                onClick={() => setPreviewQuotation(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <span className="text-slate-400 text-[10px]">Client:</span>
+                <div className="font-bold text-slate-900 dark:text-white">
+                  {previewQuotation.partyName}
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-slate-400 text-[10px]">Valid Until:</span>
+                <div className="font-bold text-slate-900 dark:text-white">
+                  {previewQuotation.validUntil || "15 Days"}
+                </div>
+              </div>
+            </div>
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+              {previewQuotation.items.map((it, idx) => (
+                <div key={idx} className="py-2.5 flex justify-between items-center">
+                  <div>
+                    <div className="font-bold text-slate-900 dark:text-white">
+                      {it.productName}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      {it.quantity} {it.unit} × {formatCurrency(it.unitPrice)} (+{it.taxRate}% GST)
+                    </div>
+                  </div>
+                  <div className="font-mono font-black text-slate-900 dark:text-white">
+                    {formatCurrency(it.total)}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center text-sm font-black">
+              <span>Estimated Total:</span>
+              <span className="font-mono text-indigo-600">
+                {formatCurrency(previewQuotation.grandTotal)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl flex items-center gap-1.5"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Estimate</span>
+              </button>
+
+              {previewQuotation.status !== "CONVERTED_TO_INVOICE" && (
+                <button
+                  type="button"
+                  onClick={() => handleConvert(previewQuotation)}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>1-Click Convert to Tax Invoice</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

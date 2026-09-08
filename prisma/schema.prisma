@@ -1,0 +1,752 @@
+// Prisma Schema for VyaparFlow Enterprise Multi-Tenant ERP & POS
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------------------------------------
+// MULTI-TENANCY & RBAC
+// --------------------------------------------------------
+
+model Tenant {
+  id            String          @id @default(uuid())
+  name          String
+  slug          String          @unique
+  legalName     String?
+  gstin         String?
+  stateCode     String          @default("27") // Default e.g. 27 for Maharashtra
+  pan           String?
+  phone         String?
+  email         String?
+  address       String?
+  city          String?
+  pincode       String?
+  logoUrl       String?
+  signatureUrl  String?
+  upiVpa        String?         // e.g. merchant@icici / 9876543210@paytm
+  upiName       String?
+  thermalHeader String?
+  thermalFooter String?
+  isKycVerified Boolean         @default(true)
+  plan          SubscriptionTier @default(ENTERPRISE)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  users         User[]
+  firms         Firm[]
+  categories    Category[]
+  godowns       Godown[]
+  products      Product[]
+  parties       Party[]
+  invoices      Invoice[]
+  payments      Payment[]
+  expenses      Expense[]
+  purchaseInvoices PurchaseInvoice[]
+  quotations    Quotation[]
+  creditNotes   CreditNote[]
+  debitNotes    DebitNote[]
+  movements     StockMovement[]
+  auditLogs     AuditLog[]
+  settings      TenantSetting?
+
+  @@index([gstin])
+  @@index([slug])
+}
+
+enum SubscriptionTier {
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+model TenantSetting {
+  id                    String   @id @default(uuid())
+  tenantId              String   @unique
+  tenant                Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  defaultPrintFormat    PrintFormat @default(THERMAL_80MM)
+  autoRoundOff          Boolean  @default(true)
+  enableEWayBill        Boolean  @default(true)
+  enableEInvoice        Boolean  @default(false)
+  enableBatchTracking   Boolean  @default(true)
+  enableSerialImei      Boolean  @default(true)
+  enableWhatsAppAlerts  Boolean  @default(true)
+  lowStockThreshold     Int      @default(10)
+  expiryAlertDays       Int      @default(60)
+  termsAndConditions    String?  @db.Text
+  bankName              String?
+  bankAccountNumber     String?
+  bankIfsc              String?
+  bankBranch            String?
+  googleSheetId         String?  // Google Sheet ID for live backup sync (Inventory, Sales, Purchases)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+enum PrintFormat {
+  THERMAL_58MM
+  THERMAL_80MM
+  A4_STANDARD
+  A5_LANDSCAPE
+}
+
+model User {
+  id           String    @id @default(uuid())
+  tenantId     String?   // NULL for SUPER_ADMIN, Mandatory for tenant users
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  email        String    @unique
+  phone        String?
+  passwordHash String
+  role         UserRole  @default(CASHIER)
+  permissions  Json?     // Custom granular permissions override
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  auditLogs    AuditLog[]
+
+  @@index([tenantId, email])
+  @@index([email])
+}
+
+// --------------------------------------------------------
+// MULTI-FIRM & BUSINESS PROFILES
+// --------------------------------------------------------
+
+model Firm {
+  id            String    @id @default(uuid())
+  tenantId      String
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String    // Trade Name
+  legalName     String?
+  gstin         String?   @db.VarChar(15)
+  stateCode     String    @db.Char(2)
+  stateName     String
+  address       String?   @db.Text
+  pincode       String?   @db.VarChar(6)
+  phone         String?   @db.VarChar(15)
+  email         String?
+  upiId         String?
+  bankName      String?
+  accountNo     String?
+  ifsc          String?
+  invoicePrefix String    @default("INV")
+  isPrimary     Boolean   @default(false)
+  logoUrl       String?   @db.Text
+  signatureUrl  String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  invoices      Invoice[]
+
+  @@index([tenantId])
+  @@index([gstin])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  OWNER
+  TENANT_OWNER
+  ACCOUNTANT
+  CASHIER
+  STOREKEEPER
+}
+
+// --------------------------------------------------------
+// INVENTORY, WAREHOUSES & MASTER DATA
+// --------------------------------------------------------
+
+model Category {
+  id             String    @id @default(uuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  codePrefix     String?   // e.g. "ELEC", "PHARM", "GROC"
+  defaultGstRate Float     @default(18.0) // 0, 5, 12, 18, 28
+  hsnCode        String?
+  description    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  products       Product[]
+
+  @@index([tenantId])
+}
+
+model Godown {
+  id          String         @id @default(uuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String         // e.g. "Main Shop", "Central Godown B"
+  location    String?
+  isDefault   Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  batches     ProductBatch[]
+  invoices    Invoice[]
+
+  @@index([tenantId])
+}
+
+model Product {
+  id            String          @id @default(uuid())
+  tenantId      String
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryId    String?
+  category      Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  sku           String
+  barcode       String?         // EAN-13, Code-128
+  name          String
+  description   String?
+  unit          String          @default("PCS") // PCS, BOX, KG, LTR, MTR, PACK
+  secondaryUnit String?         // Secondary conversion unit e.g. 1 BOX = 24 PCS
+  conversionRate Float          @default(1.0)
+  hsn           String          @default("9999")
+  taxRate       Float           @default(18.0) // GST %
+  isTaxInclusive Boolean        @default(false)
+  cessRate      Float           @default(0.0)
+  purchasePrice Float           @default(0.0)
+  salePrice     Float           @default(0.0)
+  mrp           Float           @default(0.0)
+  wholesalePrice Float          @default(0.0)
+  minStock      Int             @default(5)
+  currentStock  Float           @default(0.0)
+  trackBatch    Boolean         @default(false)
+  trackSerial   Boolean         @default(false) // IMEI or Serial
+  imageUrl      String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  batches       ProductBatch[]
+  serials       ProductSerial[]
+  invoiceItems  InvoiceItem[]
+  purchaseItems PurchaseInvoiceItem[]
+  quotationItems QuotationItem[]
+  returnItems   ReturnItem[]
+  movements     StockMovement[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, barcode])
+  @@index([tenantId, name])
+}
+
+model ProductBatch {
+  id            String        @id @default(uuid())
+  productId     String
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  godownId      String
+  godown        Godown        @relation(fields: [godownId], references: [id], onDelete: Cascade)
+  batchNo       String        // e.g. "BAT-2026-X9"
+  mfgDate       DateTime?
+  expDate       DateTime?     // Expiry tracking
+  stockQty      Float         @default(0.0)
+  purchasePrice Float         @default(0.0)
+  salePrice     Float         @default(0.0)
+  mrp           Float         @default(0.0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  invoiceItems  InvoiceItem[]
+  purchaseItems PurchaseInvoiceItem[]
+  quotationItems QuotationItem[]
+  returnItems   ReturnItem[]
+  movements     StockMovement[]
+
+  @@unique([productId, godownId, batchNo])
+  @@index([expDate])
+}
+
+model ProductSerial {
+  id            String       @id @default(uuid())
+  productId     String
+  product       Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  serialOrImei  String       // Unique IMEI or Serial number
+  status        SerialStatus @default(AVAILABLE)
+  godownId      String?
+  invoiceItemId String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([productId, serialOrImei])
+  @@index([serialOrImei])
+  @@index([status])
+}
+
+enum SerialStatus {
+  AVAILABLE
+  SOLD
+  RETURNED
+  DEFECTIVE
+}
+
+// --------------------------------------------------------
+// PARTIES (CUSTOMERS & VENDORS)
+// --------------------------------------------------------
+
+model Party {
+  id              String      @id @default(uuid())
+  tenantId        String
+  tenant          Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  type            PartyType   @default(CUSTOMER)
+  phone           String?
+  email           String?
+  gstin           String?     // 15 Digit GSTIN
+  pan             String?
+  stateCode       String      @default("27") // GST state code
+  billingAddress  String?
+  shippingAddress String?
+  city            String?
+  pincode         String?
+  creditLimit     Float       @default(0.0)
+  openingBalance  Float       @default(0.0)
+  currentBalance  Float       @default(0.0) // Positive = Receivable, Negative = Payable
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  invoices        Invoice[]
+  purchaseInvoices PurchaseInvoice[]
+  quotations      Quotation[]
+  creditNotes     CreditNote[]
+  debitNotes      DebitNote[]
+  payments        Payment[]
+
+  @@index([tenantId, name])
+  @@index([tenantId, phone])
+  @@index([tenantId, gstin])
+}
+
+enum PartyType {
+  CUSTOMER
+  VENDOR
+  BOTH
+}
+
+// --------------------------------------------------------
+// SALES & BILLING PIPELINE
+// --------------------------------------------------------
+
+model Invoice {
+  id             String          @id @default(uuid())
+  tenantId       String
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceType    InvoiceType     @default(TAX_INVOICE)
+  invoiceNo      String          // e.g. "INV-2627-0001"
+  referenceNo    String?         // Reference PO or Quotation No
+  firmId         String?
+  firm           Firm?           @relation(fields: [firmId], references: [id], onDelete: SetNull)
+  partyId        String?
+  party          Party?          @relation(fields: [partyId], references: [id], onDelete: SetNull)
+  godownId       String?
+  godown         Godown?         @relation(fields: [godownId], references: [id], onDelete: SetNull)
+  placeOfSupply  String          @default("27") // State Code
+  isInterState   Boolean         @default(false)
+  subtotal       Float           @default(0.0)
+  discountTotal  Float           @default(0.0)
+  taxableAmount  Float           @default(0.0)
+  cgst           Float           @default(0.0)
+  sgst           Float           @default(0.0)
+  igst           Float           @default(0.0)
+  cess           Float           @default(0.0)
+  roundOff       Float           @default(0.0)
+  grandTotal     Float           @default(0.0)
+  paidAmount     Float           @default(0.0)
+  balanceAmount  Float           @default(0.0)
+  status         InvoiceStatus   @default(COMPLETED)
+  paymentStatus  PaymentStatus   @default(PAID)
+  dueDate        DateTime?
+  ewayBillNo     String?
+  irnHash        String?
+  qrCodeUrl      String?
+  notes          String?
+  terms          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  items          InvoiceItem[]
+  payments       Payment[]
+
+  @@unique([tenantId, invoiceType, invoiceNo])
+  @@index([tenantId, createdAt])
+  @@index([partyId])
+  @@index([firmId])
+}
+
+enum InvoiceType {
+  QUOTATION
+  PROFORMA
+  DELIVERY_CHALLAN
+  TAX_INVOICE
+  BILL_OF_SUPPLY
+  CREDIT_NOTE
+  PURCHASE_ORDER
+  PURCHASE_BILL
+  DEBIT_NOTE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PAID
+  PARTIAL
+  UNPAID
+}
+
+model InvoiceItem {
+  id              String         @id @default(uuid())
+  invoiceId       String
+  invoice         Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batchId         String?
+  batch           ProductBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  selectedSerials String[]       // Array of serial/IMEI numbers
+  itemDescription String?
+  quantity        Float          @default(1.0)
+  unit            String         @default("PCS")
+  mrp             Float          @default(0.0)
+  unitPrice       Float          @default(0.0) // Rate before tax or inclusive base
+  isTaxInclusive  Boolean        @default(false)
+  discountPercent Float          @default(0.0)
+  discountAmount  Float          @default(0.0)
+  taxRate         Float          @default(18.0) // GST %
+  taxableAmount   Float          @default(0.0)
+  cgst            Float          @default(0.0)
+  sgst            Float          @default(0.0)
+  igst            Float          @default(0.0)
+  cess            Float          @default(0.0)
+  total           Float          @default(0.0)
+
+  @@index([invoiceId])
+  @@index([productId])
+}
+
+// --------------------------------------------------------
+// PAYMENTS & BANKING
+// --------------------------------------------------------
+
+model Payment {
+  id           String        @id @default(uuid())
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoiceId    String?
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  partyId      String?
+  party        Party?        @relation(fields: [partyId], references: [id], onDelete: SetNull)
+  mode         PaymentMode   @default(CASH)
+  amount       Float         @default(0.0)
+  refNumber    String?       // UPI Txn ID, Cheque No, Bank Ref
+  chequeDate   DateTime?
+  bankName     String?
+  notes        String?
+  status       PaymentStatus @default(PAID)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([invoiceId])
+  @@index([partyId])
+}
+
+enum PaymentMode {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  CREDIT
+}
+
+// --------------------------------------------------------
+// EXPENSES & CASH DRAWER
+// --------------------------------------------------------
+
+model Expense {
+  id          String      @id @default(uuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category    String      // Rent, Utilities, Salary, Tea & Refreshment, Transport, Stationery
+  title       String
+  amount      Float       @default(0.0)
+  paymentMode PaymentMode @default(CASH)
+  refNumber   String?
+  notes       String?
+  expenseDate DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+
+  @@index([tenantId, expenseDate])
+}
+
+// --------------------------------------------------------
+// STOCK AUDIT & MOVEMENTS
+// --------------------------------------------------------
+
+model StockMovement {
+  id         String       @id @default(uuid())
+  tenantId   String
+  tenant     Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  batchId    String?
+  batch      ProductBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  fromGodown String?
+  toGodown   String?
+  qty        Float        @default(1.0)
+  type       MovementType @default(SALE)
+  reference  String?      // Invoice No, PO No, Transfer Challan
+  notes      String?
+  timestamp  DateTime     @default(now())
+
+  @@index([tenantId, productId])
+  @@index([timestamp])
+}
+
+enum MovementType {
+  SALE
+  PURCHASE
+  TRANSFER
+  ADJUSTMENT
+  RETURN
+}
+
+// --------------------------------------------------------
+// AUDIT LOGS
+// --------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   // e.g. "INVOICE_CREATED", "STOCK_ADJUSTED", "PAYMENT_RECORDED"
+  entity    String   // "Invoice", "Product", "Party"
+  entityId  String
+  details   Json?
+  timestamp DateTime @default(now())
+
+  @@index([tenantId, timestamp])
+}
+
+// --------------------------------------------------------
+// PURCHASES & VENDOR INWARD PIPELINE
+// --------------------------------------------------------
+
+model PurchaseInvoice {
+  id             String          @id @default(uuid())
+  tenantId       String
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  vendorId       String
+  vendor         Party           @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  billNo         String          // Vendor Bill No e.g. "PUR-2026-901"
+  billDate       DateTime        @default(now())
+  dueDate        DateTime?
+  placeOfSupply  String          @default("27")
+  isInterState   Boolean         @default(false)
+  subtotal       Float           @default(0.0)
+  taxAmount      Float           @default(0.0)
+  cgst           Float           @default(0.0)
+  sgst           Float           @default(0.0)
+  igst           Float           @default(0.0)
+  roundOff       Float           @default(0.0)
+  grandTotal     Float           @default(0.0)
+  paidAmount     Float           @default(0.0)
+  balanceAmount  Float           @default(0.0)
+  paymentMode    PaymentMode     @default(CREDIT)
+  status         PurchaseStatus  @default(RECEIVED)
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  items          PurchaseInvoiceItem[]
+
+  @@unique([tenantId, vendorId, billNo])
+  @@index([tenantId, billDate])
+  @@index([vendorId])
+}
+
+enum PurchaseStatus {
+  ORDERED
+  RECEIVED
+  PARTIAL
+  CANCELLED
+}
+
+model PurchaseInvoiceItem {
+  id                String          @id @default(uuid())
+  purchaseInvoiceId String
+  purchaseInvoice   PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batchId           String?
+  batch             ProductBatch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batchNo           String?
+  mfgDate           DateTime?
+  expDate           DateTime?
+  quantity          Float           @default(1.0)
+  unit              String          @default("PCS")
+  purchasePrice     Float           @default(0.0)
+  mrp               Float           @default(0.0)
+  salePrice         Float           @default(0.0)
+  taxRate           Float           @default(18.0)
+  taxableAmount     Float           @default(0.0)
+  taxAmount         Float           @default(0.0)
+  total             Float           @default(0.0)
+
+  @@index([purchaseInvoiceId])
+  @@index([productId])
+}
+
+// --------------------------------------------------------
+// QUOTATIONS & ESTIMATES PIPELINE
+// --------------------------------------------------------
+
+model Quotation {
+  id                  String          @id @default(uuid())
+  tenantId            String
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partyId             String?
+  party               Party?          @relation(fields: [partyId], references: [id], onDelete: SetNull)
+  quoteNo             String          // e.g. "EST-2026-001"
+  quoteDate           DateTime        @default(now())
+  validUntil          DateTime?
+  subtotal            Float           @default(0.0)
+  discountTotal       Float           @default(0.0)
+  taxableAmount       Float           @default(0.0)
+  taxAmount           Float           @default(0.0)
+  roundOff            Float           @default(0.0)
+  grandTotal          Float           @default(0.0)
+  status              QuotationStatus @default(DRAFT)
+  convertedInvoiceId  String?         // ID of invoice if converted
+  notes               String?
+  terms               String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  items               QuotationItem[]
+
+  @@unique([tenantId, quoteNo])
+  @@index([tenantId, quoteDate])
+  @@index([partyId])
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CONVERTED_TO_INVOICE
+}
+
+model QuotationItem {
+  id              String         @id @default(uuid())
+  quotationId     String
+  quotation       Quotation      @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batchId         String?
+  batch           ProductBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  quantity        Float          @default(1.0)
+  unit            String         @default("PCS")
+  unitPrice       Float          @default(0.0)
+  discountPercent Float          @default(0.0)
+  discountAmount  Float          @default(0.0)
+  taxRate         Float          @default(18.0)
+  taxableAmount   Float          @default(0.0)
+  taxAmount       Float          @default(0.0)
+  total           Float          @default(0.0)
+
+  @@index([quotationId])
+  @@index([productId])
+}
+
+// --------------------------------------------------------
+// RETURNS: CREDIT NOTES & DEBIT NOTES
+// --------------------------------------------------------
+
+model CreditNote {
+  id                 String       @id @default(uuid())
+  tenantId           String
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  creditNoteNo       String       // e.g. "CN-2026-001"
+  originalInvoiceId  String?
+  partyId            String
+  party              Party        @relation(fields: [partyId], references: [id], onDelete: Restrict)
+  totalAmount        Float        @default(0.0)
+  taxAmount          Float        @default(0.0)
+  refundMode         PaymentMode  @default(CREDIT)
+  reason             ReturnReason @default(DEFECTIVE_GOODS)
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  items              ReturnItem[]
+
+  @@unique([tenantId, creditNoteNo])
+  @@index([tenantId, createdAt])
+  @@index([partyId])
+}
+
+model DebitNote {
+  id                 String       @id @default(uuid())
+  tenantId           String
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  debitNoteNo        String       // e.g. "DN-2026-001"
+  originalPurchaseId String?
+  partyId            String       // Vendor ID
+  party              Party        @relation(fields: [partyId], references: [id], onDelete: Restrict)
+  totalAmount        Float        @default(0.0)
+  taxAmount          Float        @default(0.0)
+  adjustmentMode     PaymentMode  @default(CREDIT)
+  reason             ReturnReason @default(DEFECTIVE_GOODS)
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  items              ReturnItem[]
+
+  @@unique([tenantId, debitNoteNo])
+  @@index([tenantId, createdAt])
+  @@index([partyId])
+}
+
+enum ReturnReason {
+  DEFECTIVE_GOODS
+  EXPIRED_STOCK
+  DAMAGED_IN_TRANSIT
+  WRONG_ITEM_SHIPPED
+  CUSTOMER_CANCELLATION
+  EXCESS_BILLING
+  OTHER
+}
+
+model ReturnItem {
+  id           String        @id @default(uuid())
+  creditNoteId String?
+  creditNote   CreditNote?   @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  debitNoteId  String?
+  debitNote    DebitNote?    @relation(fields: [debitNoteId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batchId      String?
+  batch        ProductBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  quantity     Float         @default(1.0)
+  unitPrice    Float         @default(0.0)
+  taxRate      Float         @default(18.0)
+  total        Float         @default(0.0)
+
+  @@index([creditNoteId])
+  @@index([debitNoteId])
+  @@index([productId])
+}
