@@ -223,9 +223,11 @@ interface PosState {
 
   // Auth & RBAC Staff Management
   currentUser: StaffUser | null;
+  superAdminUser: StaffUser;
   staffUsers: StaffUser[];
   loginUser: (email: string, passwordOrPin?: string, preferredRole?: UserRole) => { success: boolean; user?: StaffUser; error?: string };
   logoutUser: () => void;
+  updateCurrentUserCredentials: (email: string, password?: string) => void;
   addStaffUser: (user: StaffUser) => void;
   updateStaffUser: (user: Partial<StaffUser> & { id: string }) => void;
   deleteStaffUser: (userId: string) => void;
@@ -261,6 +263,7 @@ export const usePosStore = create<PosState>()(
       creditNotes: INITIAL_CREDIT_NOTES,
       debitNotes: INITIAL_DEBIT_NOTES,
       currentUser: INITIAL_STAFF[0] as StaffUser,
+      superAdminUser: SUPER_ADMIN_USER as StaffUser,
       staffUsers: INITIAL_STAFF as StaffUser[],
       tenants: INITIAL_TENANTS_REGISTRY,
 
@@ -1412,58 +1415,43 @@ export const usePosStore = create<PosState>()(
       },
 
       loginUser: (email, passwordOrPin, preferredRole) => {
-        const { staffUsers, tenant } = get();
+        const { staffUsers, tenant, superAdminUser } = get();
         const cleanEmail = email.trim().toLowerCase();
 
         // Check if Super Admin login
-        if (cleanEmail === "superadmin@vyaparflow.enterprise" || preferredRole === "SUPER_ADMIN") {
-          const superAdminUser: StaffUser = {
-            ...SUPER_ADMIN_USER,
+        if (cleanEmail === superAdminUser.email.toLowerCase()) {
+          if (preferredRole && preferredRole !== "SUPER_ADMIN") {
+            return { success: false, error: "Role mismatch. Please select Platform Admin." };
+          }
+          if (passwordOrPin && superAdminUser.password && passwordOrPin !== superAdminUser.password) {
+            return { success: false, error: "Invalid credentials for Platform Developer" };
+          }
+          const adminUser: StaffUser = {
+            ...superAdminUser,
             lastLoginAt: new Date().toISOString(),
           };
-          set({ currentUser: superAdminUser });
+          set({ currentUser: adminUser });
           if (typeof window !== "undefined") {
-            localStorage.setItem("vyaparflow_auth_session", JSON.stringify(superAdminUser));
+            localStorage.setItem("vyaparflow_auth_session", JSON.stringify(adminUser));
           }
-          return { success: true, user: superAdminUser };
+          return { success: true, user: adminUser };
         }
 
+        // Check Business Owners / Staff
         let matched = staffUsers.find(
           (u) => u.email.toLowerCase() === cleanEmail
         );
 
-        // Fallback matching by role if specified
-        if (!matched && preferredRole) {
-          matched = staffUsers.find((u) => u.role === preferredRole);
+        if (!matched) {
+          return { success: false, error: "Account not found with this email" };
         }
 
-        if (!matched) {
-          // Auto-register as active user for seamless testing
-          matched = {
-            id: `usr-${Date.now()}`,
-            tenantId: tenant.id,
-            name: cleanEmail.split("@")[0].toUpperCase() + " (User)",
-            email: cleanEmail,
-            phone: "9820099999",
-            role: preferredRole || "TENANT_OWNER",
-            isActive: true,
-            permissions: {
-              canEditBackdatedInvoices: true,
-              canViewPurchaseRates: true,
-              canViewProfitMargins: true,
-              canGiveBillDiscounts: true,
-              canDeleteInvoices: true,
-              canManageUsers: true,
-              canAccessSettings: true,
-            },
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString(),
-          };
-          set((state) => ({
-            staffUsers: [matched!, ...state.staffUsers],
-            currentUser: matched!,
-          }));
-          return { success: true, user: matched };
+        if (passwordOrPin && matched.password && passwordOrPin !== matched.password && passwordOrPin !== matched.pin) {
+          return { success: false, error: "Invalid credentials" };
+        }
+
+        if (preferredRole && matched.role !== preferredRole && !(matched.role === "TENANT_OWNER" && preferredRole === "OWNER")) {
+          return { success: false, error: "Role mismatch. Please select the correct role." };
         }
 
         if (!matched.isActive) {
@@ -1527,6 +1515,31 @@ export const usePosStore = create<PosState>()(
         set({ currentUser: null });
         if (typeof window !== "undefined") {
           localStorage.removeItem("vyaparflow_auth_session");
+        }
+      },
+
+      updateCurrentUserCredentials: (email, password) => {
+        const { currentUser, staffUsers, superAdminUser } = get();
+        if (!currentUser) return;
+
+        const updatedUser = {
+          ...currentUser,
+          email: email.trim(),
+          ...(password ? { password } : {}),
+        };
+
+        if (currentUser.role === "SUPER_ADMIN") {
+          set({ 
+            currentUser: updatedUser,
+            superAdminUser: updatedUser,
+          });
+        } else {
+          set({
+            currentUser: updatedUser,
+            staffUsers: staffUsers.map((u) => (u.id === currentUser.id ? updatedUser : u)),
+          });
+          // Note: In a real app, we might also call savePermanentVaultData here for staffUsers.
+          savePermanentVaultData({ staffUsers: get().staffUsers });
         }
       },
 

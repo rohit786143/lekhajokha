@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SidebarContent } from "@/components/layout/sidebar";
 import { usePosStore } from "@/lib/pos-store";
-import { Menu, X, LogOut, ShieldCheck, User, Building2 } from "lucide-react";
+import { Menu, X, LogOut, ShieldCheck, User, Building2, Sliders } from "lucide-react";
 
 export default function DashboardLayout({
   children,
@@ -14,7 +14,11 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { currentUser, staffUsers, logoutUser, tenant, getActiveFirm, firms, activeFirmId } = usePosStore();
+  const { currentUser, staffUsers, logoutUser, tenant, getActiveFirm, firms, activeFirmId, updateCurrentUserCredentials } = usePosStore();
+  
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  const [userPassword, setUserPassword] = useState("");
 
   const activeFirm =
     (typeof getActiveFirm === "function" ? getActiveFirm() : null) ||
@@ -33,6 +37,15 @@ export default function DashboardLayout({
     if (typeof window !== "undefined") {
       window.location.href = "/login";
     }
+  };
+
+  const handleSettingsSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userEmail.trim()) return;
+    updateCurrentUserCredentials(userEmail, userPassword || undefined);
+    setIsSettingsOpen(false);
+    setUserPassword("");
+    alert("Credentials updated successfully!");
   };
 
   return (
@@ -90,6 +103,20 @@ export default function DashboardLayout({
               </div>
             </div>
 
+            {/* Settings Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setUserEmail(activeUser.email);
+                setIsSettingsOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl text-xs font-extrabold transition shadow-2xs cursor-pointer"
+              title="Update Credentials"
+            >
+              <Sliders className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span className="hidden sm:inline">Settings</span>
+            </button>
+
             {/* Logout Button */}
             <button
               type="button"
@@ -113,6 +140,70 @@ export default function DashboardLayout({
         {/* ---------------- Main Content Workspace ---------------- */}
         <main className="flex-1 min-w-0 overflow-y-auto">{children}</main>
       </div>
+
+      {/* User Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-slate-900" />
+                <h3 className="text-base font-black text-slate-900">Update Profile Credentials</h3>
+              </div>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Update your account login email and password below.
+            </p>
+
+            <form onSubmit={handleSettingsSave} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Email Address (Username)</label>
+                <input
+                  type="email"
+                  required
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  className="w-full mt-1.5 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold text-slate-700">New Password (Leave blank to keep current)</label>
+                <input
+                  type="password"
+                  value={userPassword}
+                  onChange={(e) => setUserPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full mt-1.5 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow-sm transition cursor-pointer"
+                >
+                  Update Credentials
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -30,10 +30,10 @@ export default function LoginPage() {
     firms[0] ||
     tenant;
 
-  const [email, setEmail] = useState("admin@vyaparflow.enterprise");
-  const [password, setPassword] = useState("admin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole>("TENANT_OWNER");
+  const [selectedRole, setSelectedRole] = useState<UserRole | "Platform Admin" | "Business Owner" | "Accountant / CA" | "Store Assistant">("Business Owner");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +43,13 @@ export default function LoginPage() {
     setError(null);
 
     setTimeout(() => {
-      const res = loginUser(email, password, selectedRole);
+      let mappedRole: UserRole = "OWNER";
+      if (selectedRole === "Platform Admin") mappedRole = "SUPER_ADMIN";
+      else if (selectedRole === "Business Owner") mappedRole = "OWNER";
+      else if (selectedRole === "Accountant / CA") mappedRole = "ACCOUNTANT";
+      else if (selectedRole === "Store Assistant") mappedRole = "STOREKEEPER";
+
+      const res = loginUser(email, password, mappedRole);
       setIsLoading(false);
 
       if (!res.success) {
@@ -51,7 +57,7 @@ export default function LoginPage() {
         return;
       }
 
-      const role = res.user?.role || selectedRole;
+      const role = res.user?.role;
       if (role === "SUPER_ADMIN") {
         router.push("/admin/dashboard");
       } else if (role === "CASHIER") {
@@ -86,41 +92,39 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 flex flex-col justify-center items-center p-4 font-sans text-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col justify-center items-center p-4 font-sans text-slate-900">
       <div className="w-full max-w-lg space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-2 flex flex-col items-center">
           <img
             src="/logo.png"
             alt="लेखा जोखा ENTERPRISE ERP"
-            className="h-16 w-auto object-contain drop-shadow-xl"
+            className="h-16 w-auto object-contain drop-shadow-sm"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500">
             Multi-Tenant Cloud ERP • Role-Based Authentication & Staff Terminal
           </p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl space-y-6">
-          <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div className="bg-white/80 backdrop-blur-xl border border-slate-200/60 p-8 rounded-3xl shadow-xl space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div className="space-y-0.5">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-indigo-400" />
+              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-indigo-500" />
                 <span>Sign In to Workstation</span>
               </h2>
-              <p className="text-xs text-slate-400">
-                Business Tenant: <span className="font-semibold text-indigo-300">{activeFirm.name}</span>
-              </p>
+
             </div>
             {currentUser && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">
                 ● Logged in as {currentUser.name.split(" ")[0]}
               </span>
             )}
           </div>
 
           {error && (
-            <div className="p-3 bg-rose-500/20 border border-rose-500/40 rounded-xl text-xs text-rose-200 flex items-center gap-2">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-600 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
@@ -128,7 +132,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-slate-300">Email Address / Username</label>
+              <label className="text-xs font-semibold text-slate-600">Email Address / Username</label>
               <div className="relative mt-1">
                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -136,14 +140,14 @@ export default function LoginPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@vyaparflow.enterprise"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-950/60 border border-white/15 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium"
+                  placeholder="Username"
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-medium shadow-xs"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-300">Password / Security PIN</label>
+              <label className="text-xs font-semibold text-slate-600">Password / Security PIN</label>
               <div className="relative mt-1">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
@@ -152,12 +156,12 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-950/60 border border-white/15 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono"
+                  className="w-full pl-10 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono shadow-xs"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -165,18 +169,16 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-300">Assigned Role Persona</label>
+              <label className="text-xs font-semibold text-slate-600">Select Role</label>
               <select
                 value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value as UserRole)}
-                className="w-full mt-1 px-3 py-2.5 bg-slate-950/80 border border-white/15 rounded-xl text-xs text-white font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                onChange={(e) => setSelectedRole(e.target.value as any)}
+                className="w-full mt-1 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500 shadow-xs"
               >
-                <option value="TENANT_OWNER">👑 Business Owner (Admin) - Full Control</option>
-                <option value="OWNER">🏢 Primary Business Owner</option>
-                <option value="ACCOUNTANT">📊 Accountant / Manager - Reports & P&L</option>
-                <option value="CASHIER">⚡ Billing Cashier - Fast POS Terminal Only</option>
-                <option value="STOREKEEPER">📦 Storekeeper - Inventory & Inward Stock</option>
-                <option value="SUPER_ADMIN">🛡️ SaaS Super Admin - Platform Control</option>
+                <option value="Platform Admin">🛡️ Platform Admin</option>
+                <option value="Business Owner">👑 Business Owner</option>
+                <option value="Accountant / CA">📊 Accountant / CA</option>
+                <option value="Store Assistant">📦 Store Assistant</option>
               </select>
             </div>
 
@@ -190,74 +192,10 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* 1-Click Fast Staff Persona Switcher */}
-          <div className="space-y-2 pt-3 border-t border-white/10">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                1-Click Quick Demo Staff Logins:
-              </span>
-              <Link
-                href="/staff"
-                className="text-[10px] font-bold text-indigo-400 hover:underline"
-              >
-                + Staff Hub
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {staffUsers.slice(0, 4).map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => handleQuickLogin(u.role, u.email)}
-                  className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-left transition group"
-                >
-                  <div className="text-xs font-bold text-white group-hover:text-indigo-300 line-clamp-1">
-                    {u.role === "TENANT_OWNER" || u.role === "OWNER" ? "👑 " : u.role === "ACCOUNTANT" ? "📊 " : u.role === "CASHIER" ? "⚡ " : "📦 "}
-                    {u.name.split(" ")[0]}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono line-clamp-1">
-                    {u.role.replace(/_/g, " ")}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {/* Super Admin Console Portal banner */}
-          <div className="p-3 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-indigo-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300">
-                <Globe className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-amber-200">Platform Developer Portal</div>
-                <div className="text-[10px] text-slate-400">Global SaaS Super Admin Access</div>
-              </div>
-            </div>
-            <Link
-              href="/admin/login"
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition flex items-center gap-1 shadow-md shadow-amber-500/20"
-            >
-              <span>Super Admin</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
         </div>
 
-        {/* Footer Navigation Links */}
-        <div className="flex items-center justify-center gap-4 text-xs text-slate-400">
-          <Link href="/" className="hover:text-white font-semibold">
-            ← Dashboard
-          </Link>
-          <span>•</span>
-          <Link href="/pos" className="hover:text-white font-semibold">
-            POS Terminal
-          </Link>
-          <span>•</span>
-          <Link href="/staff" className="hover:text-white font-semibold">
-            Team & Roles
-          </Link>
-        </div>
+
       </div>
     </div>
   );

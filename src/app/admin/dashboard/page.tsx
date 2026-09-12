@@ -48,11 +48,13 @@ export default function SuperAdminDashboardPage() {
     products,
     staffUsers,
     currentUser,
+    superAdminUser,
     onboardTenant,
     updateTenantStatus,
     resetTenantOwnerPassword,
     masqueradeTenant,
     logoutUser,
+    updateCurrentUserCredentials,
   } = usePosStore();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,6 +64,10 @@ export default function SuperAdminDashboardPage() {
   const [resetModalTenant, setResetModalTenant] = useState<TenantRegistryItem | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState("");
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [saEmail, setSaEmail] = useState("");
+  const [saPassword, setSaPassword] = useState("");
 
   const handleExportBackup = () => {
     const backupData = {
@@ -182,7 +188,16 @@ export default function SuperAdminDashboardPage() {
 
   const handleAdminLogout = () => {
     logoutUser();
-    router.push("/admin/login");
+    router.push("/login");
+  };
+
+  const handleAdminSettingsSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!saEmail.trim()) return;
+    updateCurrentUserCredentials(saEmail, saPassword || undefined);
+    showToast("Super Admin credentials updated successfully!");
+    setIsSettingsOpen(false);
+    setSaPassword("");
   };
 
   // Filtered Businesses (Super Admin sees ONLY Business Owners & Businesses)
@@ -242,37 +257,28 @@ export default function SuperAdminDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Cluster: ap-south-1 • System Healthy</span>
-            </div>
-
-            {/* Developer Session Badge */}
-            <div className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-2xl">
-              <div className="w-7 h-7 rounded-xl bg-slate-900 text-white font-black text-xs flex items-center justify-center font-mono">
-                SA
-              </div>
-              <div className="text-left leading-tight hidden sm:block">
-                <div className="text-xs font-bold text-slate-900">Platform Developer</div>
-                <div className="text-[10px] text-slate-500 font-mono">superadmin@vyaparflow.enterprise</div>
-              </div>
-              <button
-                type="button"
-                onClick={handleAdminLogout}
-                title="Sign out of Developer Console"
-                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition ml-1 cursor-pointer"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-
-            <Link
-              href="/"
-              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm"
+            {/* Update Credentials Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setSaEmail(currentUser?.email || "superadmin@vyaparflow.enterprise");
+                setIsSettingsOpen(true);
+              }}
+              className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-sm"
             >
-              <span>ERP Client View</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+              <Sliders className="w-4 h-4" />
+              <span>Update Credentials</span>
+            </button>
+
+            {/* Logout Button */}
+            <button
+              type="button"
+              onClick={handleAdminLogout}
+              className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-sm"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Logout</span>
+            </button>
           </div>
         </div>
       </header>
@@ -800,6 +806,70 @@ export default function SuperAdminDashboardPage() {
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow-sm transition cursor-pointer"
                 >
                   Save New Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Super Admin Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-slate-900" />
+                <h3 className="text-base font-black text-slate-900">Super Admin Settings</h3>
+              </div>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Update your Platform Developer email and password here.
+            </p>
+
+            <form onSubmit={handleAdminSettingsSave} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Email Address (Username)</label>
+                <input
+                  type="email"
+                  required
+                  value={saEmail}
+                  onChange={(e) => setSaEmail(e.target.value)}
+                  className="w-full mt-1.5 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold text-slate-700">New Password (Leave blank to keep current)</label>
+                <input
+                  type="password"
+                  value={saPassword}
+                  onChange={(e) => setSaPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full mt-1.5 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow-sm transition cursor-pointer"
+                >
+                  Update Credentials
                 </button>
               </div>
             </form>

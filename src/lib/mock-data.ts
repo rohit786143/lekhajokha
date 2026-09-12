@@ -277,10 +277,10 @@ export const INITIAL_STAFF = [
 export const SUPER_ADMIN_USER: StaffUser = {
   id: "usr-superadmin-00",
   name: "Platform Architect (Super Admin)",
-  email: "superadmin@vyaparflow.enterprise",
+  email: "rohitsagarksg@gmail.com",
   phone: "+91 99000 00000",
   role: "SUPER_ADMIN",
-  password: "superadmin123",
+  password: "Rohit@40014",
   pin: "9999",
   isActive: true,
   permissions: {
