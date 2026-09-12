@@ -26,16 +26,28 @@ export default function EWayBillPage() {
     invoices[1]?.id || invoices[0]?.id || ""
   );
 
+  const [distanceKm, setDistanceKm] = useState<number>(0);
+  const [vehicleNo, setVehicleNo] = useState<string>("");
+  const [vehicleType, setVehicleType] = useState<"R" | "O">("R");
+  const [transMode, setTransMode] = useState<"1" | "2" | "3" | "4">("1");
+  const [transporterName, setTransporterName] = useState<string>("");
+  const [transporterId, setTransporterId] = useState<string>("");
+  const [transDocNo, setTransDocNo] = useState<string>("");
+  const [transDocDate, setTransDocDate] = useState<string>("");
+
   const highValueInvoices = invoices.filter((i) => i.grandTotal >= 50000 || i.ewayBillNo);
   const activeInvoice = invoices.find((i) => i.id === selectedInvoiceId) || invoices[0];
 
   const payload = activeInvoice
     ? generateNICPayload(activeInvoice, tenant, {
-        distanceKm: 25,
-        vehicleNo: "MH01AB1234",
-        vehicleType: "R",
-        transMode: "1",
-        transporterName: "Direct Road Express Logistics",
+        distanceKm,
+        vehicleNo,
+        vehicleType,
+        transMode,
+        transporterName,
+        transporterId,
+        transDocNo,
+        transDocDate,
       })
     : null;
 
@@ -92,7 +104,7 @@ export default function EWayBillPage() {
           <h2 className="text-sm font-black text-slate-900 dark:text-white">
             Eligible Consignments (&gt; ₹50k or Inter-State)
           </h2>
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[250px] overflow-y-auto pr-2">
             {highValueInvoices.map((inv) => (
               <div
                 key={inv.id}
@@ -122,6 +134,106 @@ export default function EWayBillPage() {
                 )}
               </div>
             ))}
+          </div>
+
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+            <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
+              <Truck className="w-4 h-4 text-indigo-600" /> Part B: Transport Details
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Trans Mode</label>
+                <select 
+                  value={transMode} 
+                  onChange={(e) => setTransMode(e.target.value as any)}
+                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                >
+                  <option value="1">1 - Road</option>
+                  <option value="2">2 - Rail</option>
+                  <option value="3">3 - Air</option>
+                  <option value="4">4 - Ship</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Distance (Km)</label>
+                <input 
+                  type="number" 
+                  value={distanceKm || ""} 
+                  onChange={(e) => setDistanceKm(Number(e.target.value))}
+                  placeholder="e.g. 50"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Vehicle No.</label>
+                <input 
+                  type="text" 
+                  value={vehicleNo} 
+                  onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
+                  placeholder="e.g. MH01AB1234"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Vehicle Type</label>
+                <select 
+                  value={vehicleType} 
+                  onChange={(e) => setVehicleType(e.target.value as any)}
+                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                >
+                  <option value="R">Regular (R)</option>
+                  <option value="O">ODC (O)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1 col-span-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Transporter Name</label>
+                <input 
+                  type="text" 
+                  value={transporterName} 
+                  onChange={(e) => setTransporterName(e.target.value)}
+                  placeholder="e.g. FedEx / Delhivery"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                />
+              </div>
+
+              <div className="space-y-1 col-span-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Transporter ID (GSTIN)</label>
+                <input 
+                  type="text" 
+                  value={transporterId} 
+                  onChange={(e) => setTransporterId(e.target.value.toUpperCase())}
+                  placeholder="e.g. 27ABCDE1234F1Z5"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Doc No. (LR/RR)</label>
+                <input 
+                  type="text" 
+                  value={transDocNo} 
+                  onChange={(e) => setTransDocNo(e.target.value)}
+                  placeholder="e.g. LR-123"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase">Doc Date (DD/MM)</label>
+                <input 
+                  type="text" 
+                  value={transDocDate} 
+                  onChange={(e) => setTransDocDate(e.target.value)}
+                  placeholder="e.g. 15/05/2026"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono font-bold"
+                />
+              </div>
+            </div>
           </div>
         </div>
 

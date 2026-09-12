@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { usePosStore } from "@/lib/pos-store";
@@ -38,7 +38,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 
-export default function QuickStockInwardPage() {
+function QuickStockInwardContent() {
   const searchParams = useSearchParams();
   const initialBarcodeParam = searchParams?.get("barcode") || "";
 
@@ -855,5 +855,13 @@ export default function QuickStockInwardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function QuickStockInwardPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500 font-medium">Loading Quick Inward...</div>}>
+      <QuickStockInwardContent />
+    </Suspense>
   );
 }

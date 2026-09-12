@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import * as XLSX from "xlsx";
 import Link from "next/link";
 import { usePosStore } from "@/lib/pos-store";
 import { useTenantData } from "@/lib/use-tenant-data";
@@ -27,10 +28,12 @@ import {
   Check,
   ScanLine,
   FolderPlus,
+  UploadCloud,
 } from "lucide-react";
+import { HsnSearchAutocomplete } from "@/components/ui/hsn-search-autocomplete";
 
 export default function InventoryPage() {
-  const { tenant, addCategory, addProduct, deleteProduct, clearAllInventory } = usePosStore();
+  const { tenant, addCategory, addProduct, deleteProduct, clearAllInventory, inwardStock } = usePosStore();
   const { products, categories } = useTenantData();
   const tenantProducts = products;
   const tenantCategories = categories;
@@ -41,6 +44,7 @@ export default function InventoryPage() {
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [selectedProductForBarcode, setSelectedProductForBarcode] = useState<Product | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // New product form state
   const [newProdName, setNewProdName] = useState("");
@@ -229,6 +233,85 @@ export default function InventoryPage() {
     setIsAddModalOpen(false);
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: "binary" });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+        let importedCount = 0;
+        let updatedCount = 0;
+
+        for (const row of data) {
+          const hsnCode = row.HSN?.toString() || row.hsn?.toString() || row.HSNCode?.toString();
+          if (!hsnCode) continue;
+
+          // Check if product with this HSN exists
+          const existingProduct = tenantProducts.find((p) => p.hsn === hsnCode);
+          const stockQty = Number(row.Stock) || Number(row.StockQuantity) || Number(row.stock) || 0;
+          const purchasePrice = Number(row.PurchasePrice) || Number(row.purchasePrice) || 0;
+          const salePrice = Number(row.SalePrice) || Number(row.salePrice) || 0;
+          const mrp = Number(row.MRP) || Number(row.mrp) || salePrice;
+          
+          if (existingProduct) {
+            // Inward stock based on HSN Code
+            inwardStock({
+              productId: existingProduct.id,
+              godownId: "godown-1",
+              quantity: stockQty,
+              purchasePrice: purchasePrice || existingProduct.purchasePrice,
+              salePrice: salePrice || existingProduct.salePrice,
+              mrp: mrp || existingProduct.mrp,
+            });
+            updatedCount++;
+          } else {
+            // Create new product if it doesn't exist
+            const catPrefix = tenantCategories[0]?.codePrefix || "GEN";
+            const newSku = row.SKU?.toString() || generateSku(catPrefix, row.Name?.toString() || "Imported Product");
+            const newBarcode = row.Barcode?.toString() || generateEan13("890");
+
+            addProduct({
+              id: `prod-imp-${Date.now()}-${Math.random().toString(36).substr(2,5)}`,
+              tenantId: tenant.id,
+              name: row.Name?.toString() || row.name?.toString() || "Imported Product",
+              sku: newSku,
+              barcode: newBarcode,
+              categoryId: tenantCategories[0]?.id || "",
+              categoryName: tenantCategories[0]?.name || "",
+              unit: row.Unit?.toString() || "PCS",
+              hsn: hsnCode,
+              taxRate: Number(row.TaxRate) || Number(row.taxRate) || tenantCategories[0]?.defaultGstRate || 18,
+              isTaxInclusive: true,
+              purchasePrice: purchasePrice,
+              salePrice: salePrice,
+              mrp: mrp,
+              minStock: 5,
+              currentStock: stockQty,
+              trackBatch: false,
+              trackSerial: false,
+            });
+            importedCount++;
+          }
+        }
+        alert(`Successfully imported/updated inventory!\nNew Products: ${importedCount}\nUpdated Products (HSN match): ${updatedCount}`);
+      } catch (error) {
+        console.error("Error parsing Excel:", error);
+        alert("Error parsing Excel file. Please ensure it is a valid .xlsx or .csv format.");
+      }
+      
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    reader.readAsBinaryString(file);
+  };
+
   const handleConfirmClearAll = () => {
     clearAllInventory();
     setIsClearModalOpen(false);
@@ -281,6 +364,22 @@ export default function InventoryPage() {
               <span>Remove All Inventory</span>
             </button>
           )}
+
+          <input
+            type="file"
+            accept=".xlsx, .xls, .csv"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-5 py-2.5 text-xs font-black text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-2xl shadow-sm transition border border-slate-200 dark:border-slate-700"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Import Excel</span>
+          </button>
 
           <button
             type="button"
@@ -737,12 +836,14 @@ export default function InventoryPage() {
                     <span>HSN / SAC Code</span>
                     <span className="text-[10px] text-slate-400">Auto-filled</span>
                   </label>
-                  <input
-                    type="text"
+                  <HsnSearchAutocomplete
                     value={newProdHsn}
-                    onChange={(e) => setNewProdHsn(e.target.value)}
-                    placeholder="e.g. 3004, 2106, 8517"
-                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    onChange={(code, gst) => {
+                      setNewProdHsn(code);
+                      if (gst !== undefined) {
+                        setNewProdTaxRate(gst);
+                      }
+                    }}
                   />
                 </div>
 

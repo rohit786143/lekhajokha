@@ -18,6 +18,7 @@ import {
   Layers,
   IndianRupee,
 } from "lucide-react";
+import { HsnSearchAutocomplete } from "@/components/ui/hsn-search-autocomplete";
 
 interface QuickProductModalProps {
   isOpen: boolean;
@@ -198,12 +199,15 @@ export function QuickProductModal({
               <label className="font-bold text-slate-700 dark:text-slate-300">
                 HSN Code
               </label>
-              <input
-                type="text"
-                placeholder="e.g. 1905"
+              <HsnSearchAutocomplete
                 value={hsn}
-                onChange={(e) => setHsn(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono font-bold"
+                onChange={(code, gst) => {
+                  setHsn(code);
+                  if (gst !== undefined) {
+                    setTaxRate(gst);
+                  }
+                }}
+                className="p-2.5"
               />
             </div>
 
