@@ -122,7 +122,7 @@ export default function SuperAdminDashboardPage() {
     setStateName(INDIAN_STATES[code] || "Maharashtra");
   };
 
-  const handleOnboardSubmit = (e: React.FormEvent) => {
+  const handleOnboardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!businessName.trim() || !ownerName.trim() || !ownerEmail.trim()) {
       showToast("Please fill in Business Name, Owner Name, and Owner Email.", "error");
@@ -147,9 +147,9 @@ export default function SuperAdminDashboardPage() {
       temporaryPassword: tempPassword.trim() || "welcome123",
     };
 
-    const result = onboardTenant(payload);
+    const result = await onboardTenant(payload);
     setIsOnboardModalOpen(false);
-    showToast(`🏢 Business Owner "${result.tenant.name}" (${payload.ownerName}) onboarded successfully!`);
+    showToast(`🏢 Business Owner "${result.tenant?.name || payload.businessName}" (${payload.ownerName}) onboarded successfully!`);
 
     // Reset Form
     setBusinessName("");

@@ -37,37 +37,35 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
-    setTimeout(() => {
-      let mappedRole: UserRole = "OWNER";
-      if (selectedRole === "Platform Admin") mappedRole = "SUPER_ADMIN";
-      else if (selectedRole === "Business Owner") mappedRole = "OWNER";
-      else if (selectedRole === "Accountant / CA") mappedRole = "ACCOUNTANT";
-      else if (selectedRole === "Store Assistant") mappedRole = "STOREKEEPER";
+    let mappedRole: UserRole = "OWNER";
+    if (selectedRole === "Platform Admin") mappedRole = "SUPER_ADMIN";
+    else if (selectedRole === "Business Owner") mappedRole = "OWNER";
+    else if (selectedRole === "Accountant / CA") mappedRole = "ACCOUNTANT";
+    else if (selectedRole === "Store Assistant") mappedRole = "STOREKEEPER";
 
-      const res = loginUser(email, password, mappedRole);
-      setIsLoading(false);
+    const res = await loginUser(email, password, mappedRole);
+    setIsLoading(false);
 
-      if (!res.success) {
-        setError(res.error || "Authentication failed. Please check credentials.");
-        return;
-      }
+    if (!res.success) {
+      setError(res.error || "Authentication failed. Please check credentials.");
+      return;
+    }
 
-      const role = res.user?.role;
-      if (role === "SUPER_ADMIN") {
-        router.push("/admin/dashboard");
-      } else if (role === "CASHIER") {
-        router.push("/pos");
-      } else if (role === "STOREKEEPER") {
-        router.push("/inventory");
-      } else {
-        router.push("/");
-      }
-    }, 300);
+    const role = res.user?.role;
+    if (role === "SUPER_ADMIN") {
+      router.push("/admin/dashboard");
+    } else if (role === "CASHIER") {
+      router.push("/pos");
+    } else if (role === "STOREKEEPER") {
+      router.push("/inventory");
+    } else {
+      router.push("/");
+    }
   };
 
   const handleQuickLogin = (role: UserRole, userEmail: string) => {
