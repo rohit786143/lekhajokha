@@ -1649,6 +1649,8 @@ export const usePosStore = create<PosState>()(
             ownerPhone: dbUser.phone || "",
             plan: (dbTenant.plan as any) || "PRO",
             isActive: true,
+            totalUsersCount: 1,
+            lastActiveAt: new Date().toISOString(),
             createdAt: new Date().toISOString(),
           };
 
@@ -1722,6 +1724,8 @@ export const usePosStore = create<PosState>()(
             ownerPhone: payload.ownerPhone || "",
             plan: payload.plan || "PRO",
             isActive: true,
+            totalUsersCount: 1,
+            lastActiveAt: new Date().toISOString(),
             createdAt: new Date().toISOString(),
           };
           return { tenant: mockTenant, owner: get().currentUser! };
