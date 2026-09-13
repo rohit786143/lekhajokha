@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SidebarContent } from "@/components/layout/sidebar";
 import { usePosStore } from "@/lib/pos-store";
+import { updateUserCredentialsInDb } from "@/lib/actions";
 import { Menu, X, LogOut, ShieldCheck, User, Building2, Sliders } from "lucide-react";
 
 export default function DashboardLayout({
@@ -39,9 +40,18 @@ export default function DashboardLayout({
     }
   };
 
-  const handleSettingsSave = (e: React.FormEvent) => {
+  const handleSettingsSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userEmail.trim()) return;
+
+    if (currentUser?.id && currentUser.role !== "SUPER_ADMIN") {
+       const res = await updateUserCredentialsInDb(currentUser.id, userEmail, userPassword || undefined);
+       if (!res.success) {
+          alert("Failed to save to database: " + res.error);
+          return;
+       }
+    }
+
     updateCurrentUserCredentials(userEmail, userPassword || undefined);
     setIsSettingsOpen(false);
     setUserPassword("");

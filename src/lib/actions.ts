@@ -186,6 +186,30 @@ export async function updateTenantOwnerCredentialsInDb(tenantId: string, newEmai
   }
 }
 
+export async function updateUserCredentialsInDb(userId: string, newEmail: string, newPassword?: string) {
+  try {
+    const dataToUpdate: any = { email: newEmail.toLowerCase() };
+    if (newPassword) {
+      dataToUpdate.passwordHash = newPassword;
+    }
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: dataToUpdate,
+    });
+    
+    if (updatedUser.tenantId && (updatedUser.role === "TENANT_OWNER" || updatedUser.role === "OWNER")) {
+      await prisma.tenant.update({
+          where: { id: updatedUser.tenantId },
+          data: { email: newEmail.toLowerCase() }
+      });
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 export async function deleteTenantInDb(tenantId: string) {
   try {
     // Soft delete per PRO rules
