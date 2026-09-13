@@ -74,8 +74,8 @@ export default function LoginPage() {
     setPassword("password123");
     setIsLoading(true);
 
-    setTimeout(() => {
-      const res = loginUser(userEmail, "password123", role);
+    setTimeout(async () => {
+      const res = await loginUser(userEmail, "password123", role);
       setIsLoading(false);
       if (role === "SUPER_ADMIN") {
         router.push("/admin/dashboard");
