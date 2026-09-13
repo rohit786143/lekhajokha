@@ -1913,6 +1913,8 @@ export const usePosStore = create<PosState>()(
             pincode: "400001",
             upiVpa: `${tenantItem.ownerEmail.split("@")[0]}@icici`,
             upiName: tenantItem.name,
+            plan: tenantItem.plan || "BASIC",
+            subscriptionStatus: tenantItem.subscriptionStatus || "ACTIVE",
             bankName: "HDFC Bank Ltd",
             bankAccountNumber: "50200012345678",
             bankIfsc: "HDFC0000123",
