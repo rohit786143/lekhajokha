@@ -100,12 +100,12 @@ export default function LoginPage() {
           <img
             src="/logo.png"
             alt="लेखा जोखा ERP"
-            className="h-20 w-auto object-contain drop-shadow-sm"
+            className="h-32 w-auto object-contain drop-shadow-sm -mt-10"
           />
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mt-4">
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mt-2">
             Cloud Billing & POS System
           </h1>
-          <p className="text-sm text-slate-500 font-medium max-w-md leading-relaxed">
+          <p className="text-sm text-slate-500 font-medium leading-relaxed">
             Manage your inventory, GST billing, and multi-branch business from one powerful workstation.
           </p>
         </div>
@@ -124,17 +124,17 @@ export default function LoginPage() {
             </ul>
           </div>
           
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3 relative overflow-hidden text-white">
-            <div className="absolute top-0 right-0 p-4 opacity-10"><Zap className="w-24 h-24" /></div>
+          <div className="bg-gradient-to-b from-indigo-50 to-white border-2 border-indigo-200 rounded-2xl p-5 shadow-lg shadow-indigo-100 space-y-3 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10"><Zap className="w-24 h-24 text-indigo-600" /></div>
             <div className="relative z-10">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-wider rounded-lg border border-indigo-500/30">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-indigo-200">
                 <Zap className="w-3 h-3" /> Pro Plan
               </div>
-              <div className="text-2xl font-black mt-3">₹1,843<span className="text-xs text-slate-400 font-medium">/yr</span></div>
-              <ul className="text-xs text-slate-300 space-y-2 mt-3">
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> Multi-branch POS</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> Advanced Reports</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-400" /> E-Way & Batches</li>
+              <div className="text-2xl font-black text-slate-900 mt-3">₹1,843<span className="text-xs text-slate-500 font-medium">/yr</span></div>
+              <ul className="text-xs text-slate-700 space-y-2 mt-3">
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-500" /> Multi-branch POS</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-500" /> Advanced Reports</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-500" /> E-Way & Batches</li>
               </ul>
             </div>
           </div>
