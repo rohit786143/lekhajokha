@@ -112,29 +112,33 @@ export default function LoginPage() {
 
         {/* Subscription Plans */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-emerald-200">
-              <Sparkles className="w-3 h-3" /> Basic Plan
+          {/* BASIC PLAN */}
+          <div className="bg-white border-2 border-emerald-400 rounded-2xl shadow-lg relative overflow-hidden group hover:-translate-y-1 transition duration-300">
+            <div className="bg-emerald-500 text-white px-4 py-2.5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-1.5 shadow-sm">
+              <Sparkles className="w-4 h-4" /> Basic Plan
             </div>
-            <div className="text-2xl font-black text-slate-900">₹1,143<span className="text-xs text-slate-500 font-medium">/yr</span></div>
-            <ul className="text-xs text-slate-600 space-y-2">
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Single User Access</li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Basic GST Billing</li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Simple Inventory</li>
-            </ul>
+            <div className="p-5 space-y-3">
+              <div className="text-2xl font-black text-slate-900">₹1,143<span className="text-xs text-slate-500 font-medium">/yr</span></div>
+              <ul className="text-xs text-slate-600 space-y-2">
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Single User Access</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Basic GST Billing</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Simple Inventory</li>
+              </ul>
+            </div>
           </div>
           
-          <div className="bg-gradient-to-b from-indigo-50 to-white border-2 border-indigo-200 rounded-2xl p-5 shadow-lg shadow-indigo-100 space-y-3 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10"><Zap className="w-24 h-24 text-indigo-600" /></div>
-            <div className="relative z-10">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase tracking-wider rounded-lg border border-indigo-200">
-                <Zap className="w-3 h-3" /> Pro Plan
-              </div>
-              <div className="text-2xl font-black text-slate-900 mt-3">₹1,843<span className="text-xs text-slate-500 font-medium">/yr</span></div>
-              <ul className="text-xs text-slate-700 space-y-2 mt-3">
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-500" /> Multi-branch POS</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-500" /> Advanced Reports</li>
-                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-500" /> E-Way & Batches</li>
+          {/* PRO PLAN */}
+          <div className="bg-gradient-to-b from-indigo-50 to-white border-2 border-indigo-500 rounded-2xl shadow-xl shadow-indigo-200/50 relative overflow-hidden group hover:-translate-y-1 transition duration-300">
+            <div className="bg-indigo-600 text-white px-4 py-2.5 font-black uppercase tracking-widest text-xs flex items-center justify-center gap-1.5 shadow-sm">
+              <Zap className="w-4 h-4" /> Pro Plan
+            </div>
+            <div className="absolute top-10 right-0 p-4 opacity-10 group-hover:scale-125 transition duration-500"><Zap className="w-24 h-24 text-indigo-600" /></div>
+            <div className="p-5 relative z-10 space-y-3">
+              <div className="text-3xl font-black text-indigo-900">₹1,843<span className="text-xs text-indigo-500 font-medium">/yr</span></div>
+              <ul className="text-xs text-slate-700 space-y-2 mt-3 font-medium">
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-600" /> Multi-branch POS</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-600" /> Advanced Reports</li>
+                <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-indigo-600" /> E-Way & Batches</li>
               </ul>
             </div>
           </div>
