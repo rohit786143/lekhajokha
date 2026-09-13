@@ -758,7 +758,7 @@ export default function SuperAdminDashboardPage() {
 
                 <div className="col-span-2">
                   <label className="font-bold text-slate-700">Subscription Plan Tier *</label>
-                  <div className="grid grid-cols-3 gap-3 mt-1.5">
+                  <div className="grid grid-cols-2 gap-3 mt-1.5">
                     {(["BASIC", "PRO"] as TenantPlan[]).map((p) => (
                       <button
                         key={p}
