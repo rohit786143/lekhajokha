@@ -939,15 +939,7 @@ export const usePosStore = create<PosState>()(
           const isWalkIn = !state.selectedParty || state.selectedParty.id === "party-walkin-cash" || !state.selectedParty.gstin;
           const newPos = isWalkIn ? currentActiveFirm.stateCode : (state.selectedParty?.stateCode || currentActiveFirm.stateCode);
 
-          return {
-            firms: updated,
-            activeFirmId: nextActiveFirmId,
-            placeOfSupply: isActiveOrPrimary ? newPos : state.placeOfSupply,
-            selectedParty:
-              isActiveOrPrimary && isWalkIn && state.selectedParty
-                ? { ...state.selectedParty, stateCode: currentActiveFirm.stateCode }
-                : state.selectedParty,
-            tenant: isActiveOrPrimary
+            const newTenant = isActiveOrPrimary
               ? {
                   ...state.tenant,
                   name: currentActiveFirm.name,
@@ -964,10 +956,51 @@ export const usePosStore = create<PosState>()(
                   bankAccountNumber: currentActiveFirm.accountNo || state.tenant.bankAccountNumber,
                   bankIfsc: currentActiveFirm.ifsc || state.tenant.bankIfsc,
                 }
-              : state.tenant,
-          };
-        });
-      },
+              : state.tenant;
+
+            // Also update the tenants registry so the admin dashboard reflects the changes
+            const updatedTenants = (state.tenants || []).map((t) => {
+              if (t.id === newTenant.id) {
+                return {
+                  ...t,
+                  name: newTenant.name,
+                  legalName: newTenant.legalName,
+                  gstin: newTenant.gstin,
+                  ownerEmail: newTenant.email || t.ownerEmail,
+                  ownerPhone: newTenant.phone || t.ownerPhone,
+                };
+              }
+              return t;
+            });
+
+            // Update current user if this is their primary tenant
+            let updatedCurrentUser = state.currentUser;
+            let updatedStaffUsers = state.staffUsers;
+            if (isActiveOrPrimary && state.currentUser?.tenantId === newTenant.id && (state.currentUser.role === "TENANT_OWNER" || state.currentUser.role === "OWNER")) {
+                if (currentActiveFirm.email) {
+                    updatedCurrentUser = { ...state.currentUser, email: currentActiveFirm.email };
+                    updatedStaffUsers = state.staffUsers.map(u => u.id === updatedCurrentUser!.id ? updatedCurrentUser! : u);
+                    if (typeof window !== "undefined") {
+                        localStorage.setItem("vyaparflow_auth_session", JSON.stringify(updatedCurrentUser));
+                    }
+                }
+            }
+
+            return {
+              firms: updated,
+              activeFirmId: nextActiveFirmId,
+              placeOfSupply: isActiveOrPrimary ? newPos : state.placeOfSupply,
+              selectedParty:
+                isActiveOrPrimary && isWalkIn && state.selectedParty
+                  ? { ...state.selectedParty, stateCode: currentActiveFirm.stateCode }
+                  : state.selectedParty,
+              tenant: newTenant,
+              tenants: updatedTenants,
+              currentUser: updatedCurrentUser,
+              staffUsers: updatedStaffUsers,
+            };
+          });
+        },
 
       deleteFirm: (firmId) => {
         set((state) => {
@@ -1546,13 +1579,41 @@ export const usePosStore = create<PosState>()(
             currentUser: updatedUser,
             superAdminUser: updatedUser,
           });
+          if (typeof window !== "undefined") localStorage.setItem("vyaparflow_auth_session", JSON.stringify(updatedUser));
         } else {
+          const { tenants, tenant, firms } = get();
+          
+          // Also sync to the tenant registry and active firm so changes reflect everywhere
+          const updatedTenants = tenants.map(t => {
+              if (t.id === currentUser.tenantId) {
+                  return { ...t, ownerEmail: updatedUser.email };
+              }
+              return t;
+          });
+          
+          const updatedTenant = tenant.id === currentUser.tenantId 
+             ? { ...tenant, email: updatedUser.email } 
+             : tenant;
+
+          const updatedFirms = firms.map(f => {
+              if (f.tenantId === currentUser.tenantId && f.isPrimary) {
+                  return { ...f, email: updatedUser.email };
+              }
+              return f;
+          });
+
           set({
             currentUser: updatedUser,
             staffUsers: staffUsers.map((u) => (u.id === currentUser.id ? updatedUser : u)),
+            tenants: updatedTenants,
+            tenant: updatedTenant,
+            firms: updatedFirms,
           });
-          // Note: In a real app, we might also call savePermanentVaultData here for staffUsers.
-          savePermanentVaultData({ staffUsers: get().staffUsers });
+          
+          if (typeof window !== "undefined") {
+              localStorage.setItem("vyaparflow_auth_session", JSON.stringify(updatedUser));
+          }
+          savePermanentVaultData({ staffUsers: get().staffUsers, tenants: updatedTenants, firms: updatedFirms });
         }
       },
 
