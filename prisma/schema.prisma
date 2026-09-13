@@ -32,6 +32,7 @@ model Tenant {
   thermalHeader String?
   thermalFooter String?
   isKycVerified Boolean         @default(true)
+  isActive      Boolean         @default(true)
   plan          SubscriptionTier @default(ENTERPRISE)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt

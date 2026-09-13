@@ -4,6 +4,12 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePosStore } from "@/lib/pos-store";
+import { 
+  getTenantsFromDb, 
+  createTenantInDb, 
+  updateTenantStatusInDb, 
+  resetTenantOwnerPasswordInDb 
+} from "@/lib/actions";
 import { TenantRegistryItem, TenantPlan, OnboardTenantPayload } from "@/lib/types";
 import { INDIAN_STATES, extractStateFromGstin, isValidGstin } from "@/lib/tax-engine";
 import {
@@ -42,20 +48,31 @@ import {
 export default function SuperAdminDashboardPage() {
   const router = useRouter();
   const {
-    tenants,
     firms,
     parties,
     products,
     staffUsers,
     currentUser,
     superAdminUser,
-    onboardTenant,
-    updateTenantStatus,
-    resetTenantOwnerPassword,
     masqueradeTenant,
     logoutUser,
     updateCurrentUserCredentials,
   } = usePosStore();
+
+  const [tenants, setTenants] = useState<TenantRegistryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadTenants() {
+      setIsLoading(true);
+      const res = await getTenantsFromDb();
+      if (res.success && res.tenants) {
+        setTenants(res.tenants as any);
+      }
+      setIsLoading(false);
+    }
+    loadTenants();
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [planFilter, setPlanFilter] = useState<string>("ALL");
@@ -134,22 +151,33 @@ export default function SuperAdminDashboardPage() {
       return;
     }
 
-    const payload: OnboardTenantPayload = {
-      businessName: businessName.trim(),
+    const payload = {
+      name: businessName.trim(),
       legalName: legalName.trim() || businessName.trim(),
       gstin: gstin.trim() || undefined,
       stateCode,
       stateName,
       plan,
       ownerName: ownerName.trim(),
-      ownerEmail: ownerEmail.trim().toLowerCase(),
-      ownerPhone: ownerPhone.trim() || undefined,
+      email: ownerEmail.trim().toLowerCase(),
+      phone: ownerPhone.trim() || "",
       temporaryPassword: tempPassword.trim() || "welcome123",
     };
 
-    const result = await onboardTenant(payload);
+    const result = await createTenantInDb(payload);
+    if (!result.success) {
+      showToast(result.error || "Failed to create business", "error");
+      return;
+    }
+
     setIsOnboardModalOpen(false);
-    showToast(`🏢 Business Owner "${result.tenant?.name || payload.businessName}" (${payload.ownerName}) onboarded successfully!`);
+    showToast(`🏢 Business Owner "${payload.name}" (${payload.ownerName}) onboarded successfully!`);
+
+    // Reload tenants
+    const reloadRes = await getTenantsFromDb();
+    if (reloadRes.success && reloadRes.tenants) {
+      setTenants(reloadRes.tenants as any);
+    }
 
     // Reset Form
     setBusinessName("");
@@ -161,11 +189,16 @@ export default function SuperAdminDashboardPage() {
     setTempPassword("welcome123");
   };
 
-  const handleToggleStatus = (tenant: TenantRegistryItem) => {
-    updateTenantStatus(tenant.id, !tenant.isActive);
-    showToast(
-      `Business "${tenant.name}" is now ${!tenant.isActive ? "ACTIVATED" : "SUSPENDED"}.`
-    );
+  const handleToggleStatus = async (tenant: TenantRegistryItem) => {
+    const res = await updateTenantStatusInDb(tenant.id, !tenant.isActive);
+    if (res.success) {
+      showToast(
+        `Business "${tenant.name}" is now ${!tenant.isActive ? "ACTIVATED" : "SUSPENDED"}.`
+      );
+      setTenants(tenants.map(t => t.id === tenant.id ? { ...t, isActive: !t.isActive } : t));
+    } else {
+      showToast(res.error || "Failed to update status", "error");
+    }
   };
 
   const handleMasquerade = (tenant: TenantRegistryItem) => {
@@ -176,14 +209,18 @@ export default function SuperAdminDashboardPage() {
     }, 300);
   };
 
-  const handleSavePasswordReset = (e: React.FormEvent) => {
+  const handleSavePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetModalTenant || !newPasswordInput.trim()) return;
 
-    resetTenantOwnerPassword(resetModalTenant.id, newPasswordInput.trim());
-    showToast(`🔑 Password updated for owner of "${resetModalTenant.name}"`);
-    setResetModalTenant(null);
-    setNewPasswordInput("");
+    const res = await resetTenantOwnerPasswordInDb(resetModalTenant.id, newPasswordInput.trim());
+    if (res.success) {
+      showToast(`🔑 Password updated for owner of "${resetModalTenant.name}"`);
+      setResetModalTenant(null);
+      setNewPasswordInput("");
+    } else {
+      showToast(res.error || "Failed to reset password", "error");
+    }
   };
 
   const handleAdminLogout = () => {

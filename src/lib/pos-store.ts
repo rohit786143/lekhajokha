@@ -1605,7 +1605,7 @@ export const usePosStore = create<PosState>()(
       // Super Admin & Multi-Tenant Registry Methods
       onboardTenant: async (payload: OnboardTenantPayload) => {
         try {
-          const { createTenantInDb, createUserInDb } = await import("./actions");
+          const { createTenantInDb } = await import("./actions");
 
           const dbTenantRes = await createTenantInDb({
             name: payload.businessName,
@@ -1613,28 +1613,16 @@ export const usePosStore = create<PosState>()(
             phone: payload.ownerPhone || "9820000000",
             plan: payload.plan || "PRO",
             stateCode: payload.stateCode || "27",
+            ownerName: payload.ownerName,
+            temporaryPassword: payload.temporaryPassword || "welcome123",
           });
 
-          if (!dbTenantRes.success || !dbTenantRes.tenant) {
+          if (!dbTenantRes.success || !dbTenantRes.tenant || !dbTenantRes.owner) {
             throw new Error(dbTenantRes.error || "Failed to create tenant in DB");
           }
 
           const dbTenant = dbTenantRes.tenant;
-
-          const dbUserRes = await createUserInDb({
-            tenantId: dbTenant.id,
-            name: payload.ownerName,
-            email: payload.ownerEmail.toLowerCase(),
-            phone: payload.ownerPhone || "9820000000",
-            passwordHash: payload.temporaryPassword || "welcome123", // In a real app, hash this!
-            role: "OWNER",
-          });
-
-          if (!dbUserRes.success || !dbUserRes.user) {
-            throw new Error(dbUserRes.error || "Failed to create owner user in DB");
-          }
-
-          const dbUser = dbUserRes.user;
+          const dbUser = dbTenantRes.owner;
 
           // Map to local types for Zustand state
           const newTenant: TenantRegistryItem = {

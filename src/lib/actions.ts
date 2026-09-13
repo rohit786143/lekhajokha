@@ -13,6 +13,8 @@ export async function createTenantInDb(data: {
   phone: string;
   plan: string;
   stateCode: string;
+  ownerName: string;
+  temporaryPassword?: string;
 }) {
   try {
     const slug = data.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-" + Date.now();
@@ -24,6 +26,7 @@ export async function createTenantInDb(data: {
         phone: data.phone,
         stateCode: data.stateCode,
         plan: data.plan as any,
+        isActive: true,
       },
     });
 
@@ -45,7 +48,20 @@ export async function createTenantInDb(data: {
       },
     });
 
-    return { success: true, tenant, firm };
+    // Create the primary tenant owner user
+    const owner = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        name: data.ownerName,
+        email: data.email,
+        phone: data.phone,
+        passwordHash: data.temporaryPassword || "welcome123", // Ideally hashed, assuming mock hash for now
+        role: "TENANT_OWNER",
+        isActive: true,
+      },
+    });
+
+    return { success: true, tenant, firm, owner };
   } catch (error: any) {
     console.error("Error creating tenant:", error);
     return { success: false, error: error.message };
@@ -54,8 +70,71 @@ export async function createTenantInDb(data: {
 
 export async function getTenantsFromDb() {
   try {
-    const tenants = await prisma.tenant.findMany();
+    const dbTenants = await prisma.tenant.findMany({
+      include: {
+        users: true,
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const tenants = dbTenants.map((t) => {
+      const owner = t.users.find((u) => u.role === "TENANT_OWNER" || u.role === "OWNER") || t.users[0];
+      return {
+        id: t.id,
+        name: t.name,
+        legalName: t.legalName || t.name,
+        gstin: t.gstin || "",
+        stateCode: t.stateCode,
+        stateName: t.stateCode === "27" ? "Maharashtra" : "Other State",
+        plan: t.plan,
+        isActive: t.isActive,
+        ownerName: owner?.name || "Unknown Owner",
+        ownerEmail: owner?.email || t.email || "",
+        ownerPhone: owner?.phone || t.phone || "",
+        totalUsersCount: t.users.length,
+        createdAt: t.createdAt.toISOString(),
+      };
+    });
+
     return { success: true, tenants };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateTenantStatusInDb(tenantId: string, isActive: boolean) {
+  try {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { isActive },
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function resetTenantOwnerPasswordInDb(tenantId: string, newPassword: string) {
+  try {
+    const users = await prisma.user.findMany({
+      where: {
+        tenantId,
+        role: { in: ["TENANT_OWNER", "OWNER"] },
+      },
+    });
+
+    if (users.length === 0) {
+      return { success: false, error: "No owner found for this tenant." };
+    }
+
+    await prisma.user.update({
+      where: { id: users[0].id },
+      data: { passwordHash: newPassword },
+    });
+
+    return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
