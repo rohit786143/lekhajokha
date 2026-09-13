@@ -1523,8 +1523,8 @@ export const usePosStore = create<PosState>()(
               address: `Main Commercial Hub, ${tenantItem.stateName}`,
               city: tenantItem.stateName,
               thermalHeader: `★ ${tenantItem.name.toUpperCase()} ★\nGSTIN: ${tenantItem.gstin || "UNREGISTERED"}\nTax Invoice / Cash Receipt`,
-              plan: res.tenant?.plan || tenantItem.plan || tenant.plan,
-              subscriptionStatus: res.tenant?.subscriptionStatus || tenantItem.subscriptionStatus || tenant.subscriptionStatus,
+              plan: (res.tenant as any)?.plan || tenantItem.plan || tenant.plan,
+              subscriptionStatus: (res.tenant as any)?.subscriptionStatus || tenantItem.subscriptionStatus || tenant.subscriptionStatus,
             }
           : matchingFirm
           ? {
@@ -1538,13 +1538,13 @@ export const usePosStore = create<PosState>()(
               phone: matchingFirm.phone || tenant.phone,
               email: matchingFirm.email || tenant.email,
               address: matchingFirm.address || tenant.address,
-              plan: res.tenant?.plan || tenant.plan,
-              subscriptionStatus: res.tenant?.subscriptionStatus || tenant.subscriptionStatus,
+              plan: (res.tenant as any)?.plan || tenant.plan,
+              subscriptionStatus: (res.tenant as any)?.subscriptionStatus || tenant.subscriptionStatus,
             }
           : {
               ...tenant,
-              plan: res.tenant?.plan || tenant.plan,
-              subscriptionStatus: res.tenant?.subscriptionStatus || tenant.subscriptionStatus,
+              plan: (res.tenant as any)?.plan || tenant.plan,
+              subscriptionStatus: (res.tenant as any)?.subscriptionStatus || tenant.subscriptionStatus,
             };
 
         const nextActiveFirmId = matchingFirm?.id || (tenantItem ? `firm-${tenantItem.id}` : get().activeFirmId);
