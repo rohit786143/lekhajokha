@@ -94,7 +94,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex flex-col md:flex-row justify-center items-center p-6 md:p-16 gap-12 md:gap-24 font-sans text-slate-900">
       
       {/* Left Column: Info & Plans */}
-      <div className="w-full max-w-xl space-y-10 flex-1">
+      <div className="w-full max-w-xl space-y-6 flex-1">
         {/* Brand Header */}
         <div className="space-y-3">
           <img
@@ -141,7 +141,7 @@ export default function LoginPage() {
         </div>
 
         {/* WhatsApp Link */}
-        <div className="pt-2">
+        <div className="-mt-2">
           <a
             href="https://wa.me/919857640014"
             target="_blank"
