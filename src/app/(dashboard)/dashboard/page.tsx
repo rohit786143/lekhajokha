@@ -65,26 +65,8 @@ export default function DashboardHomePage() {
 
   const lowStockProducts = tenantProducts.filter((p) => p.currentStock <= p.minStock);
 
-  const handleExecuteReset = () => {
-    resetAllData();
-    setIsResetConfirmOpen(false);
-    setResetSuccessToast(true);
-    setTimeout(() => setResetSuccessToast(false), 4000);
-  };
-
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto font-sans relative">
-      {/* Reset Success Toast */}
-      {resetSuccessToast && (
-        <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-          <CheckCircle2 className="w-5 h-5 text-emerald-200" />
-          <div>
-            <div className="font-bold text-sm">ERP Data Successfully Reset!</div>
-            <div className="text-xs text-emerald-100">All bills, balances and stock set to fresh clean state.</div>
-          </div>
-        </div>
-      )}
-
       {/* Top Welcome Banner - Clean Bright White Modern Card */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-6 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800">
         <div className="space-y-1.5 min-w-0">
