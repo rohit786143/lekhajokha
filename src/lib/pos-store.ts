@@ -239,7 +239,7 @@ interface PosState {
   onboardTenant: (payload: OnboardTenantPayload) => Promise<{ tenant: TenantRegistryItem; owner: StaffUser }>;
   updateTenantStatus: (tenantId: string, isActive: boolean) => void;
   resetTenantOwnerPassword: (tenantId: string, newPassword: string) => void;
-  masqueradeTenant: (tenantId: string) => void;
+  masqueradeTenant: (tenantItem: TenantRegistryItem) => void;
   switchTenant: (tenantId: string) => void;
 
   // Voice AI Parser
@@ -1744,10 +1744,10 @@ export const usePosStore = create<PosState>()(
         }));
       },
 
-      masqueradeTenant: (tenantId) => {
-        const { tenants, staffUsers, firms } = get();
-        const tenantItem = tenants.find((t) => t.id === tenantId);
+      masqueradeTenant: (tenantItem: TenantRegistryItem) => {
+        const { staffUsers, firms } = get();
         if (!tenantItem) return;
+        const tenantId = tenantItem.id;
 
         const ownerUser: StaffUser = {
           id: `usr-owner-${tenantId}`,

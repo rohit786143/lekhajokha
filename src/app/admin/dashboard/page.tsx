@@ -8,7 +8,8 @@ import {
   getTenantsFromDb, 
   createTenantInDb, 
   updateTenantStatusInDb, 
-  resetTenantOwnerPasswordInDb 
+  resetTenantOwnerPasswordInDb,
+  deleteTenantInDb
 } from "@/lib/actions";
 import { TenantRegistryItem, TenantPlan, OnboardTenantPayload } from "@/lib/types";
 import { INDIAN_STATES, extractStateFromGstin, isValidGstin } from "@/lib/tax-engine";
@@ -43,6 +44,7 @@ import {
   Briefcase,
   UserCheck,
   ShieldAlert,
+  Trash2,
 } from "lucide-react";
 
 export default function SuperAdminDashboardPage() {
@@ -201,8 +203,22 @@ export default function SuperAdminDashboardPage() {
     }
   };
 
+  const handleDeleteBusiness = async (tenant: TenantRegistryItem) => {
+    if (!window.confirm(`Are you sure you want to completely delete the business "${tenant.name}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    const res = await deleteTenantInDb(tenant.id);
+    if (res.success) {
+      showToast(`Business "${tenant.name}" has been permanently deleted.`);
+      setTenants(tenants.filter(t => t.id !== tenant.id));
+    } else {
+      showToast(res.error || "Failed to delete business", "error");
+    }
+  };
+
   const handleMasquerade = (tenant: TenantRegistryItem) => {
-    masqueradeTenant(tenant.id);
+    masqueradeTenant(tenant);
     showToast(`👑 Logged in as Owner: ${tenant.ownerName} (${tenant.name})`);
     setTimeout(() => {
       window.location.href = "/";
@@ -595,11 +611,21 @@ export default function SuperAdminDashboardPage() {
                               title={t.isActive ? "Suspend Business" : "Activate Business"}
                               className={`p-2 rounded-xl border transition cursor-pointer ${
                                 t.isActive
-                                  ? "text-rose-600 hover:bg-rose-50 border-rose-200"
+                                  ? "text-amber-600 hover:bg-amber-50 border-amber-200"
                                   : "text-emerald-600 hover:bg-emerald-50 border-emerald-200"
                               }`}
                             >
                               <Sliders className="w-4 h-4" />
+                            </button>
+
+                            {/* Delete Business */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteBusiness(t)}
+                              title="Permanently Delete Business"
+                              className="p-2 text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-xl transition cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>

@@ -140,6 +140,19 @@ export async function resetTenantOwnerPasswordInDb(tenantId: string, newPassword
   }
 }
 
+export async function deleteTenantInDb(tenantId: string) {
+  try {
+    // Delete associated users and firms first (if not cascading)
+    await prisma.user.deleteMany({ where: { tenantId } });
+    await prisma.firm.deleteMany({ where: { tenantId } });
+    await prisma.tenantSetting.deleteMany({ where: { tenantId } });
+    await prisma.tenant.delete({ where: { id: tenantId } });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 // --- USERS (STAFF) ---
 
 export async function createUserInDb(data: {
