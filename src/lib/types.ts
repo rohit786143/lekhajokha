@@ -2,7 +2,9 @@
 
 export type UserRole = "SUPER_ADMIN" | "OWNER" | "TENANT_OWNER" | "ACCOUNTANT" | "CASHIER" | "STOREKEEPER";
 
-export type TenantPlan = "STARTER" | "PRO" | "ENTERPRISE";
+export type TenantPlan = "BASIC" | "PRO" | "ENTERPRISE";
+
+export type SubscriptionStatus = "ACTIVE" | "EXPIRED" | "CANCELLED" | "SUSPENDED";
 
 export interface TenantRegistryItem {
   id: string;
@@ -12,6 +14,9 @@ export interface TenantRegistryItem {
   stateCode: string;
   stateName: string;
   plan: TenantPlan;
+  subscriptionStatus: SubscriptionStatus;
+  subscriptionStart?: string;
+  subscriptionEnd?: string;
   isActive: boolean;
   ownerName: string;
   ownerEmail: string;
@@ -108,6 +113,8 @@ export interface TenantInfo {
   thermalHeader?: string;
   thermalFooter?: string;
   termsAndConditions?: string;
+  plan?: TenantPlan;
+  subscriptionStatus?: SubscriptionStatus;
 }
 
 export interface Firm {

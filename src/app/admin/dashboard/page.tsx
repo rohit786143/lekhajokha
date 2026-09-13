@@ -9,9 +9,10 @@ import {
   createTenantInDb, 
   updateTenantStatusInDb, 
   resetTenantOwnerPasswordInDb,
-  deleteTenantInDb
+  deleteTenantInDb,
+  updateTenantSubscriptionInDb
 } from "@/lib/actions";
-import { TenantRegistryItem, TenantPlan, OnboardTenantPayload } from "@/lib/types";
+import { TenantRegistryItem, TenantPlan, SubscriptionStatus, OnboardTenantPayload } from "@/lib/types";
 import { INDIAN_STATES, extractStateFromGstin, isValidGstin } from "@/lib/tax-engine";
 import {
   Building2,
@@ -81,6 +82,9 @@ export default function SuperAdminDashboardPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
   const [resetModalTenant, setResetModalTenant] = useState<TenantRegistryItem | null>(null);
+  const [changePlanTenant, setChangePlanTenant] = useState<TenantRegistryItem | null>(null);
+  const [newPlan, setNewPlan] = useState<TenantPlan>("PRO");
+  const [newStatus, setNewStatus] = useState<SubscriptionStatus>("ACTIVE");
   const [newPasswordInput, setNewPasswordInput] = useState("");
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
@@ -236,6 +240,20 @@ export default function SuperAdminDashboardPage() {
       setNewPasswordInput("");
     } else {
       showToast(res.error || "Failed to reset password", "error");
+    }
+  };
+
+  const handleChangePlanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changePlanTenant) return;
+
+    const res = await updateTenantSubscriptionInDb(changePlanTenant.id, newPlan, newStatus);
+    if (res.success) {
+      showToast(`Subscription updated for "${changePlanTenant.name}"`);
+      setTenants(tenants.map(t => t.id === changePlanTenant.id ? { ...t, plan: newPlan, subscriptionStatus: newStatus, isActive: newStatus === "ACTIVE" } : t));
+      setChangePlanTenant(null);
+    } else {
+      showToast(res.error || "Failed to update subscription", "error");
     }
   };
 
@@ -591,6 +609,20 @@ export default function SuperAdminDashboardPage() {
                               <span>Support Login</span>
                             </button>
 
+                            {/* Change Plan */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setChangePlanTenant(t);
+                                setNewPlan(t.plan);
+                                setNewStatus(t.subscriptionStatus || "ACTIVE");
+                              }}
+                              title="Change Plan & Status"
+                              className="p-2 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 border border-indigo-200 rounded-xl transition cursor-pointer"
+                            >
+                              <Layers className="w-4 h-4" />
+                            </button>
+
                             {/* Reset Password */}
                             <button
                               type="button"
@@ -869,6 +901,76 @@ export default function SuperAdminDashboardPage() {
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow-sm transition cursor-pointer"
                 >
                   Save New Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Plan Modal in Bright White */}
+      {changePlanTenant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fade-in">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-slate-900" />
+                <h3 className="text-base font-black text-slate-900">Change Subscription Plan</h3>
+              </div>
+              <button
+                onClick={() => setChangePlanTenant(null)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Update the subscription plan and status for{" "}
+              <strong className="text-slate-900">{changePlanTenant.name}</strong>.
+            </p>
+
+            <form onSubmit={handleChangePlanSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Subscription Plan</label>
+                <select
+                  value={newPlan}
+                  onChange={(e) => setNewPlan(e.target.value as any)}
+                  className="w-full mt-1.5 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                >
+                  <option value="BASIC">BASIC - Single User, Basic Billing</option>
+                  <option value="PRO">PRO - Multi-branch, POS, Advanced</option>
+                  <option value="ENTERPRISE">ENTERPRISE - Custom</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">Subscription Status</label>
+                <select
+                  value={newStatus}
+                  onChange={(e) => setNewStatus(e.target.value as any)}
+                  className="w-full mt-1.5 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="EXPIRED">EXPIRED (Read-only)</option>
+                  <option value="SUSPENDED">SUSPENDED (Locked)</option>
+                  <option value="CANCELLED">CANCELLED (Locked)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setChangePlanTenant(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-sm transition cursor-pointer"
+                >
+                  Save Subscription
                 </button>
               </div>
             </form>

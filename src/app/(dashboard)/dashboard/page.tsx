@@ -163,6 +163,27 @@ export default function DashboardHomePage() {
         </div>
       </div>
 
+      {/* Upgrade to Pro Banner */}
+      {(tenant.plan || "BASIC") === "BASIC" && (
+        <div className="bg-linear-to-r from-amber-100 to-yellow-100 dark:from-amber-950 dark:to-yellow-950 p-4 rounded-3xl border border-amber-300 dark:border-amber-800 flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-200 dark:bg-amber-900 rounded-xl text-amber-800 dark:text-amber-200">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-amber-900 dark:text-amber-100">Upgrade to PRO Plan</h3>
+              <p className="text-xs text-amber-800 dark:text-amber-200">Unlock POS billing, Advanced Reports, Multi-branch, and E-Way bills for ₹1,843 / year.</p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/settings/billing"
+            className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-black text-xs rounded-xl shadow-md transition whitespace-nowrap"
+          >
+            Upgrade Now
+          </Link>
+        </div>
+      )}
+
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-2">

@@ -36,6 +36,8 @@ export const INITIAL_TENANT: TenantInfo = {
   thermalHeader: "★ लेखा जोखा ENTERPRISE ★\nGSTIN: 27AABCU9603R1ZM | Ph: 9820012345\nTax Invoice / Cash Receipt",
   thermalFooter: "Thank you for shopping with us!\nGoods once sold will not be taken back without bill.\nVisit again! Have a great day.",
   termsAndConditions: "1. All disputes are subject to Mumbai Jurisdiction.\n2. Goods once sold will be exchanged within 7 days in original condition.\n3. Interest @ 18% p.a. will be charged if bill is not settled within credit due date.",
+  plan: "ENTERPRISE",
+  subscriptionStatus: "ACTIVE",
 };
 
 export const INITIAL_FIRMS: Firm[] = [
@@ -304,6 +306,7 @@ export const INITIAL_TENANTS_REGISTRY: TenantRegistryItem[] = [
     stateCode: "27",
     stateName: "Maharashtra",
     plan: "ENTERPRISE",
+    subscriptionStatus: "ACTIVE",
     isActive: true,
     ownerName: "Rajesh Sharma",
     ownerEmail: "admin@vyaparflow.enterprise",
@@ -320,6 +323,7 @@ export const INITIAL_TENANTS_REGISTRY: TenantRegistryItem[] = [
     stateCode: "29",
     stateName: "Karnataka",
     plan: "PRO",
+    subscriptionStatus: "ACTIVE",
     isActive: true,
     ownerName: "Dr. Arvind Rao",
     ownerEmail: "arvind@apollopharm.in",
@@ -336,6 +340,7 @@ export const INITIAL_TENANTS_REGISTRY: TenantRegistryItem[] = [
     stateCode: "07",
     stateName: "Delhi",
     plan: "PRO",
+    subscriptionStatus: "ACTIVE",
     isActive: true,
     ownerName: "Vikas Aggarwal",
     ownerEmail: "vikas@techworld.delhi",
@@ -351,7 +356,8 @@ export const INITIAL_TENANTS_REGISTRY: TenantRegistryItem[] = [
     gstin: "33AABCR4455R1Z9",
     stateCode: "33",
     stateName: "Tamil Nadu",
-    plan: "STARTER",
+    plan: "BASIC",
+    subscriptionStatus: "SUSPENDED",
     isActive: false,
     ownerName: "Sundaram Ramanathan",
     ownerEmail: "sundaram@royalsilks.tn",

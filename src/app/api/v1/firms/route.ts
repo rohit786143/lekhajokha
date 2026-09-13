@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { INITIAL_FIRMS } from "@/lib/mock-data";
 import { extractStateFromGstin, isValidGstin } from "@/lib/tax-engine";
+import { hasFeature } from "@/lib/permissions";
 
 const CreateFirmSchema = z.object({
   tenantId: z.string().min(1, "Tenant ID is required").default("tenant-vyapar-01"),
@@ -89,6 +90,17 @@ export async function POST(req: NextRequest) {
     const firmId = `firm-${Date.now()}`;
 
     try {
+      // Feature Gate Check: Multi-GSTIN
+      const existingFirms = await prisma.firm.count({ where: { tenantId: firmData.tenantId } });
+      if (existingFirms >= 1) {
+        const tenant = await prisma.tenant.findUnique({ where: { id: firmData.tenantId } });
+        if (!tenant || tenant.subscriptionStatus !== "ACTIVE" || !hasFeature(tenant.plan as any, tenant.subscriptionStatus as any, "multi_gstin")) {
+          return NextResponse.json(
+            { success: false, error: "Feature Locked: Upgrade to PRO plan to add multiple Firms/GSTINs." },
+            { status: 403 }
+          );
+        }
+      }
       if (firmData.isPrimary) {
         // Unset primary on other firms
         await prisma.firm.updateMany({

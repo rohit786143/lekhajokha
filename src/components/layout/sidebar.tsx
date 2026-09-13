@@ -2,8 +2,9 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { usePosStore } from "@/lib/pos-store";
+import { isFeatureInPlan, FeatureCode } from "@/lib/permissions";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -38,6 +39,7 @@ export interface NavSection {
     icon: React.ComponentType<{ className?: string }>;
     highlight?: boolean;
     badge?: string;
+    feature?: FeatureCode;
   }[];
 }
 
@@ -46,7 +48,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     title: "Billing & Sales",
     items: [
       { name: "Dashboard Hub", href: "/dashboard", icon: LayoutDashboard },
-      { name: "POS Billing Terminal", href: "/pos", icon: ShoppingCart, highlight: true },
+      { name: "POS Billing Terminal", href: "/pos", icon: ShoppingCart, highlight: true, feature: "pos" },
       { name: "Billing Details", href: "/sales/invoices", icon: Receipt },
       { name: "Quotations & Estimates", href: "/quotations", icon: FileText },
       { name: "Sales & Purchase Returns", href: "/returns", icon: RotateCcw },
@@ -67,22 +69,22 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
     items: [
       { name: "Party Khata & Ledgers", href: "/parties", icon: Users },
       { name: "Expenses & Cash Drawer", href: "/expenses", icon: Wallet },
-      { name: "Profit & Loss Analytics", href: "/reports/profit-loss", icon: TrendingUp },
+      { name: "Profit & Loss Analytics", href: "/reports/profit-loss", icon: TrendingUp, feature: "advanced_reports" },
     ],
   },
   {
     title: "Statutory Tax & Audit",
     items: [
       { name: "GSTR-1 Tax Filing", href: "/reports/gstr1", icon: FileSpreadsheet },
-      { name: "Daybook & Cashflow", href: "/reports/daybook", icon: Receipt },
-      { name: "E-Way Bill NIC Hub", href: "/reports/eway-bill", icon: Truck },
+      { name: "Daybook & Cashflow", href: "/reports/daybook", icon: Receipt, feature: "advanced_reports" },
+      { name: "E-Way Bill NIC Hub", href: "/reports/eway-bill", icon: Truck, feature: "eway_bill" },
     ],
   },
   {
     title: "Administration",
     items: [
-      { name: "Company & Multi-Firm", href: "/settings/company", icon: Building2 },
-      { name: "Team & Employees Hub", href: "/staff", icon: ShieldCheck },
+      { name: "Company & Multi-Firm", href: "/settings/company", icon: Building2, feature: "multi_gstin" },
+      { name: "Team & Employees Hub", href: "/staff", icon: ShieldCheck, feature: "advanced_users" },
       { name: "Backup & Recovery", href: "/settings/backup", icon: Database },
     ],
   },
@@ -196,10 +198,12 @@ export function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
               {sec.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
+                const isLocked = item.feature && !isFeatureInPlan(tenant.plan || "BASIC", item.feature);
+                
                 return (
                   <Link
                     key={item.href}
-                    href={item.href}
+                    href={isLocked ? "/settings/billing" : item.href}
                     onClick={onItemClick}
                     className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition ${
                       item.highlight
@@ -213,9 +217,14 @@ export function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
                       <Icon className={`w-4 h-4 shrink-0 ${item.highlight ? "text-white" : ""}`} />
                       <span className="truncate">{item.name}</span>
                     </div>
-                    {item.badge && (
+                    {item.badge && !isLocked && (
                       <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[9px] font-black rounded-md">
                         {item.badge}
+                      </span>
+                    )}
+                    {isLocked && (
+                      <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-800 border border-yellow-200 text-[9px] font-black rounded-md shadow-sm">
+                        PRO
                       </span>
                     )}
                   </Link>

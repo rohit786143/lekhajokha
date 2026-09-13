@@ -33,7 +33,10 @@ model Tenant {
   thermalFooter String?
   isKycVerified Boolean         @default(true)
   isActive      Boolean         @default(true)
-  plan          SubscriptionTier @default(ENTERPRISE)
+  plan          SubscriptionTier @default(BASIC)
+  subscriptionStatus SubscriptionStatus @default(ACTIVE)
+  subscriptionStart DateTime?
+  subscriptionEnd DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -59,9 +62,16 @@ model Tenant {
 }
 
 enum SubscriptionTier {
-  STARTER
+  BASIC
   PRO
   ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  SUSPENDED
 }
 
 model TenantSetting {

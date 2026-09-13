@@ -89,6 +89,9 @@ export async function getTenantsFromDb() {
         stateCode: t.stateCode,
         stateName: t.stateCode === "27" ? "Maharashtra" : "Other State",
         plan: t.plan,
+        subscriptionStatus: t.subscriptionStatus,
+        subscriptionStart: t.subscriptionStart?.toISOString(),
+        subscriptionEnd: t.subscriptionEnd?.toISOString(),
         isActive: t.isActive,
         ownerName: owner?.name || "Unknown Owner",
         ownerEmail: owner?.email || t.email || "",
@@ -109,6 +112,38 @@ export async function updateTenantStatusInDb(tenantId: string, isActive: boolean
     await prisma.tenant.update({
       where: { id: tenantId },
       data: { isActive },
+    });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateTenantSubscriptionInDb(
+  tenantId: string,
+  plan: "BASIC" | "PRO" | "ENTERPRISE",
+  status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "SUSPENDED"
+) {
+  try {
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        plan,
+        subscriptionStatus: status,
+        // If they are upgrading/downgrading, update the timestamp
+        updatedAt: new Date(),
+      },
+    });
+    
+    // Log audit action
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        action: "PLAN_CHANGED",
+        entity: "Tenant",
+        entityId: tenantId,
+        details: { newPlan: plan, newStatus: status },
+      },
     });
     return { success: true };
   } catch (error: any) {
@@ -142,11 +177,14 @@ export async function resetTenantOwnerPasswordInDb(tenantId: string, newPassword
 
 export async function deleteTenantInDb(tenantId: string) {
   try {
-    // Delete associated users and firms first (if not cascading)
-    await prisma.user.deleteMany({ where: { tenantId } });
-    await prisma.firm.deleteMany({ where: { tenantId } });
-    await prisma.tenantSetting.deleteMany({ where: { tenantId } });
-    await prisma.tenant.delete({ where: { id: tenantId } });
+    // Soft delete per PRO rules
+    await prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        subscriptionStatus: "SUSPENDED",
+        isActive: false,
+      },
+    });
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
