@@ -221,7 +221,7 @@ export default function SuperAdminDashboardPage() {
     masqueradeTenant(tenant);
     showToast(`👑 Logged in as Owner: ${tenant.ownerName} (${tenant.name})`);
     setTimeout(() => {
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     }, 300);
   };
 
