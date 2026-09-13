@@ -34,8 +34,8 @@ export default function SuperAdminLoginPage() {
     setIsLoading(true);
     setError(null);
 
-    setTimeout(() => {
-      const res = loginUser(email, password, "SUPER_ADMIN");
+    setTimeout(async () => {
+      const res = await loginUser(email, password, "SUPER_ADMIN");
       setIsLoading(false);
 
       if (!res.success) {
