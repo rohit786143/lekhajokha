@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SidebarContent } from "@/components/layout/sidebar";
 import { usePosStore } from "@/lib/pos-store";
-import { updateUserCredentialsInDb } from "@/lib/actions";
+import { updateUserCredentialsInDb, updateTenantOwnerCredentialsInDb } from "@/lib/actions";
 import { Menu, X, LogOut, ShieldCheck, User, Building2, Sliders } from "lucide-react";
 
 export default function DashboardLayout({
@@ -45,9 +45,27 @@ export default function DashboardLayout({
     if (!userEmail.trim()) return;
 
     if (currentUser?.id && currentUser.role !== "SUPER_ADMIN") {
-       const res = await updateUserCredentialsInDb(currentUser.id, userEmail, userPassword || undefined);
-       if (!res.success) {
-          alert("Failed to save to database: " + res.error);
+       let res;
+       
+       // If it's a mock ID (e.g. from masquerade or initial mock data), we can't update by user ID.
+       // Instead, we try to update the tenant owner by tenant ID.
+       if (currentUser.id.startsWith("usr-owner-") || currentUser.id.startsWith("staff-")) {
+           if (currentUser.tenantId) {
+               res = await updateTenantOwnerCredentialsInDb(currentUser.tenantId, userEmail, userPassword || undefined);
+               // If there's no real DB owner (pure mock), we just ignore the DB error and proceed to update local state
+               if (!res.success && res.error?.includes("No owner found")) {
+                   res = { success: true }; 
+               }
+           } else {
+               res = { success: true }; // Fallback for pure local mocks without tenant ID
+           }
+       } else {
+           // Real UUID DB user
+           res = await updateUserCredentialsInDb(currentUser.id, userEmail, userPassword || undefined);
+       }
+
+       if (res && !res.success) {
+          alert("Failed to save to database:\n" + res.error);
           return;
        }
     }
