@@ -1929,6 +1929,7 @@ export const usePosStore = create<PosState>()(
         debitNotes: state.debitNotes,
         parkedCarts: state.parkedCarts,
         currentUser: state.currentUser,
+        superAdminUser: state.superAdminUser,
         staffUsers: state.staffUsers,
         tenants: state.tenants,
       }),
