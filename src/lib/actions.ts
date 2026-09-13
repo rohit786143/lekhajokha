@@ -151,7 +151,7 @@ export async function updateTenantSubscriptionInDb(
   }
 }
 
-export async function resetTenantOwnerPasswordInDb(tenantId: string, newPassword: string) {
+export async function updateTenantOwnerCredentialsInDb(tenantId: string, newEmail: string, newPassword?: string) {
   try {
     const users = await prisma.user.findMany({
       where: {
@@ -164,9 +164,20 @@ export async function resetTenantOwnerPasswordInDb(tenantId: string, newPassword
       return { success: false, error: "No owner found for this tenant." };
     }
 
+    const dataToUpdate: any = { email: newEmail.toLowerCase() };
+    if (newPassword) {
+      dataToUpdate.passwordHash = newPassword;
+    }
+
     await prisma.user.update({
       where: { id: users[0].id },
-      data: { passwordHash: newPassword },
+      data: dataToUpdate,
+    });
+    
+    // Also update tenant's contact email just in case
+    await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { email: newEmail.toLowerCase() }
     });
 
     return { success: true };

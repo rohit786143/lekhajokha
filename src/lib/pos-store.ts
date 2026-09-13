@@ -241,7 +241,7 @@ interface PosState {
   onboardTenant: (payload: OnboardTenantPayload) => Promise<{ tenant: TenantRegistryItem; owner: StaffUser }>;
   updateTenantStatus: (tenantId: string, isActive: boolean) => void;
   updateTenantPlan: (tenantId: string, plan: TenantPlan, status: SubscriptionStatus) => void;
-  resetTenantOwnerPassword: (tenantId: string, newPassword: string) => void;
+  updateTenantOwnerCredentials: (tenantId: string, newEmail: string, newPassword?: string) => void;
   masqueradeTenant: (tenantItem: TenantRegistryItem) => void;
   switchTenant: (tenantId: string) => void;
 
@@ -1523,6 +1523,8 @@ export const usePosStore = create<PosState>()(
               address: `Main Commercial Hub, ${tenantItem.stateName}`,
               city: tenantItem.stateName,
               thermalHeader: `★ ${tenantItem.name.toUpperCase()} ★\nGSTIN: ${tenantItem.gstin || "UNREGISTERED"}\nTax Invoice / Cash Receipt`,
+              plan: tenantItem.plan || tenant.plan,
+              subscriptionStatus: tenantItem.subscriptionStatus || tenant.subscriptionStatus,
             }
           : matchingFirm
           ? {
@@ -1818,14 +1820,21 @@ export const usePosStore = create<PosState>()(
         });
       },
 
-      resetTenantOwnerPassword: (tenantId, newPassword) => {
-        set((state) => ({
-          staffUsers: state.staffUsers.map((u) =>
+      updateTenantOwnerCredentials: (tenantId, newEmail, newPassword) => {
+        set((state) => {
+          const updatedStaff = state.staffUsers.map((u) =>
             u.tenantId === tenantId && (u.role === "TENANT_OWNER" || u.role === "OWNER")
-              ? { ...u, password: newPassword }
+              ? { ...u, email: newEmail, ...(newPassword ? { password: newPassword } : {}) }
               : u
-          ),
-        }));
+          );
+          const updatedTenants = state.tenants.map((t) =>
+            t.id === tenantId
+              ? { ...t, ownerEmail: newEmail }
+              : t
+          );
+          savePermanentVaultData({ staffUsers: updatedStaff, tenants: updatedTenants });
+          return { staffUsers: updatedStaff, tenants: updatedTenants };
+        });
       },
 
       masqueradeTenant: (tenantItem: TenantRegistryItem) => {

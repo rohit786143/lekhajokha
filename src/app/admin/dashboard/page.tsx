@@ -8,7 +8,7 @@ import {
   getTenantsFromDb, 
   createTenantInDb, 
   updateTenantStatusInDb, 
-  resetTenantOwnerPasswordInDb,
+  updateTenantOwnerCredentialsInDb,
   deleteTenantInDb,
   updateTenantSubscriptionInDb
 } from "@/lib/actions";
@@ -83,6 +83,7 @@ export default function SuperAdminDashboardPage() {
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
   const [resetModalTenant, setResetModalTenant] = useState<TenantRegistryItem | null>(null);
   const [changePlanTenant, setChangePlanTenant] = useState<TenantRegistryItem | null>(null);
+  const [newEmailInput, setNewEmailInput] = useState("");
   const [newPlan, setNewPlan] = useState<TenantPlan>("PRO");
   const [newStatus, setNewStatus] = useState<SubscriptionStatus>("ACTIVE");
   const [newPasswordInput, setNewPasswordInput] = useState("");
@@ -234,15 +235,21 @@ export default function SuperAdminDashboardPage() {
 
   const handleSavePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetModalTenant || !newPasswordInput.trim()) return;
+    if (!resetModalTenant || !newEmailInput.trim()) return;
 
-    const res = await resetTenantOwnerPasswordInDb(resetModalTenant.id, newPasswordInput.trim());
+    const res = await updateTenantOwnerCredentialsInDb(resetModalTenant.id, newEmailInput.trim(), newPasswordInput.trim() || undefined);
     if (res.success) {
-      showToast(`🔑 Password updated for owner of "${resetModalTenant.name}"`);
+      showToast(`🔑 Credentials updated for owner of "${resetModalTenant.name}"`);
+      usePosStore.getState().updateTenantOwnerCredentials(resetModalTenant.id, newEmailInput.trim(), newPasswordInput.trim() || undefined);
+      
+      // Update local state so it reflects immediately
+      setTenants(tenants.map(t => t.id === resetModalTenant.id ? { ...t, ownerEmail: newEmailInput.trim() } : t));
+      
       setResetModalTenant(null);
       setNewPasswordInput("");
+      setNewEmailInput("");
     } else {
-      showToast(res.error || "Failed to reset password", "error");
+      showToast(res.error || "Failed to update credentials", "error");
     }
   };
 
@@ -635,6 +642,7 @@ export default function SuperAdminDashboardPage() {
                               onClick={() => {
                                 setResetModalTenant(t);
                                 setNewPasswordInput("welcome" + Math.floor(100 + Math.random() * 900));
+                                setNewEmailInput(t.ownerEmail || "");
                               }}
                               title="Reset Owner Credentials"
                               className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer"
@@ -864,7 +872,7 @@ export default function SuperAdminDashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <KeyRound className="w-5 h-5 text-slate-900" />
-                <h3 className="text-base font-black text-slate-900">Reset Owner Password</h3>
+                <h3 className="text-base font-black text-slate-900">Update Owner Credentials</h3>
               </div>
               <button
                 onClick={() => setResetModalTenant(null)}
@@ -875,18 +883,28 @@ export default function SuperAdminDashboardPage() {
             </div>
 
             <p className="text-xs text-slate-600">
-              Set a new login password for business owner{" "}
-              <strong className="text-slate-900">{resetModalTenant.ownerName}</strong> (
-              <span className="font-mono text-slate-700">{resetModalTenant.ownerEmail}</span>) of{" "}
+              Update login credentials for business owner{" "}
+              <strong className="text-slate-900">{resetModalTenant.ownerName}</strong> of{" "}
               <strong className="text-slate-900">{resetModalTenant.name}</strong>.
             </p>
 
             <form onSubmit={handleSavePasswordReset} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-700">New Temporary Password</label>
+                <label className="text-xs font-bold text-slate-700">Owner Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  value={newEmailInput}
+                  onChange={(e) => setNewEmailInput(e.target.value)}
+                  placeholder="e.g. owner@example.com"
+                  className="w-full mt-1.5 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">New Password (Leave blank to keep current)</label>
                 <input
                   type="text"
-                  required
                   value={newPasswordInput}
                   onChange={(e) => setNewPasswordInput(e.target.value)}
                   placeholder="welcome123"
@@ -906,7 +924,7 @@ export default function SuperAdminDashboardPage() {
                   type="submit"
                   className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl shadow-sm transition cursor-pointer"
                 >
-                  Save New Password
+                  Save Credentials
                 </button>
               </div>
             </form>
