@@ -8,7 +8,7 @@ const testTenants = store.tenants;
 
 for (const t of testTenants) {
   console.log(`--- Testing Support Login for Tenant: "${t.name}" ---`);
-  store.masqueradeTenant(t.id);
+  store.masqueradeTenant(t);
 
   const updatedState = usePosStore.getState();
   const currentFirm = updatedState.firms.find(f => f.id === updatedState.activeFirmId) || updatedState.firms[0];
