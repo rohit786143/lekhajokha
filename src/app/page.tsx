@@ -160,7 +160,8 @@ export default function LoginPage() {
 
       {/* Right Column: Login Card */}
       <div className="w-full max-w-md flex-1">
-        <div className="bg-white/80 backdrop-blur-xl border border-slate-200/60 p-8 rounded-3xl shadow-xl space-y-6">
+        <div className="animated-border-box shadow-xl shadow-indigo-500/10">
+          <div className="animated-border-box-inner p-8 space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div className="space-y-0.5">
               <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -243,6 +244,7 @@ export default function LoginPage() {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+          </div>
         </div>
       </div>
     </div>

@@ -104,6 +104,45 @@ body {
   border: 1px solid rgba(51, 65, 85, 0.8);
 }
 
+@keyframes border-spin {
+  0%, 15% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  85%, 100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.animated-border-box {
+  position: relative;
+  border-radius: 1.5rem;
+  padding: 2px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.animated-border-box::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 250%;
+  height: 250%;
+  background: conic-gradient(from 180deg at 50% 50%, transparent 0deg, #6366f1 180deg, transparent 360deg);
+  animation: border-spin 4s ease-in-out infinite;
+  z-index: 0;
+}
+
+.animated-border-box-inner {
+  position: relative;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: calc(1.5rem - 2px);
+  height: 100%;
+  z-index: 1;
+}
+
 /* --------------------------------------------------------
    PRINT STYLES FOR THERMAL RECEIPT & A4 TAX INVOICE
    -------------------------------------------------------- */
