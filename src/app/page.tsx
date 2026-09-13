@@ -100,7 +100,7 @@ export default function LoginPage() {
           <img
             src="/logo.png"
             alt="लेखा जोखा ERP"
-            className="h-32 w-auto object-contain drop-shadow-sm -mt-10"
+            className="h-20 w-auto object-contain drop-shadow-sm -mt-4"
           />
           <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 mt-2">
             Cloud Billing & POS System
