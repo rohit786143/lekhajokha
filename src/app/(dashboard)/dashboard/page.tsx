@@ -35,7 +35,6 @@ export default function DashboardHomePage() {
     activeFirmId,
     setActiveFirmId,
     getActiveFirm,
-    resetAllData,
   } = usePosStore();
   const {
     invoices: tenantInvoices,
@@ -47,15 +46,12 @@ export default function DashboardHomePage() {
 
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
   const [printFormat, setPrintFormat] = useState<"THERMAL" | "A4">("THERMAL");
-  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
-  const [resetSuccessToast, setResetSuccessToast] = useState(false);
 
   const currentFirm =
-    tenantFirms.find((f) => f.id === activeFirmId) ||
-    tenantFirms.find((f) => f.isPrimary) ||
-    tenantFirms[0] ||
+    (typeof getActiveFirm === "function" ? getActiveFirm() : null) ||
+    tenantFirms.find((f) => f.id === activeFirmId && f.tenantId === tenant.id) ||
+    tenantFirms.find((f) => f.tenantId === tenant.id) ||
     tenant;
-
 
   // Key KPI Aggregations (Strictly Scoped to Current Business Tenant)
   const totalSalesRevenue = tenantInvoices.reduce((sum, i) => sum + i.grandTotal, 0);
@@ -143,16 +139,6 @@ export default function DashboardHomePage() {
         </div>
 
         <div className="flex items-center flex-wrap gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={() => setIsResetConfirmOpen(true)}
-            className="flex items-center gap-2 px-4 py-3 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 active:scale-95 text-rose-700 dark:text-rose-300 font-bold text-xs rounded-2xl transition cursor-pointer"
-            title="Reset all bills, inventory & party khata to fresh initial state"
-          >
-            <RotateCcw className="w-4 h-4 text-rose-600 dark:text-rose-400" />
-            <span>Reset All Data</span>
-          </button>
-
           <Link
             href="/pos"
             className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-sm rounded-2xl shadow-lg shadow-indigo-600/20 transition"
@@ -410,59 +396,6 @@ export default function DashboardHomePage() {
           </div>
         </div>
       </div>
-
-      {/* Reset Confirmation Modal */}
-      {isResetConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/50 flex items-center justify-center text-rose-600 mx-auto">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-
-            <div className="text-center space-y-2">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white">
-                Reset All ERP Data?
-              </h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                This action will clear all past <b>Invoices & Bills</b>, reset all <b>Customer Khata & Receivables to ₹0</b>, clear <b>Operating Expenses</b>, and restore stock inventory to factory defaults.
-              </p>
-            </div>
-
-            <div className="bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs space-y-1.5 text-slate-600 dark:text-slate-300">
-              <div className="flex items-center gap-2 text-emerald-600 font-bold">
-                <Check className="w-4 h-4" />
-                <span>Sales Revenue & Bills reset to ₹0.00</span>
-              </div>
-              <div className="flex items-center gap-2 text-emerald-600 font-bold">
-                <Check className="w-4 h-4" />
-                <span>Party Khata & Ledgers reset to ₹0.00</span>
-              </div>
-              <div className="flex items-center gap-2 text-emerald-600 font-bold">
-                <Check className="w-4 h-4" />
-                <span>Inventory stock counts refreshed</span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsResetConfirmOpen(false)}
-                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteReset}
-                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg shadow-rose-600/30 transition flex items-center justify-center gap-2"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Confirm Reset</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Invoice View Modal */}
       {previewInvoice && (
