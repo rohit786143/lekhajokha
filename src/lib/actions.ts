@@ -260,8 +260,11 @@ export async function loginUserFromDb(email: string) {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
+      include: {
+        tenant: true
+      }
     });
-    return { success: true, user };
+    return { success: true, user, tenant: user?.tenant };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
