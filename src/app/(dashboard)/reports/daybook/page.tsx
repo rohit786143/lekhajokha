@@ -38,7 +38,7 @@ export default function DaybookPage() {
         <div className="space-y-1">
           <div className="flex items-center gap-2.5">
             <Link
-              href="/"
+              href="/dashboard"
               className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-600 dark:text-slate-300 rounded-xl transition"
             >
               <ArrowLeft className="w-4 h-4" />

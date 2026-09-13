@@ -45,7 +45,7 @@ export const ERP_NAV_SECTIONS: NavSection[] = [
   {
     title: "Billing & Sales",
     items: [
-      { name: "Dashboard Hub", href: "/", icon: LayoutDashboard },
+      { name: "Dashboard Hub", href: "/dashboard", icon: LayoutDashboard },
       { name: "POS Billing Terminal", href: "/pos", icon: ShoppingCart, highlight: true },
       { name: "Billing Details", href: "/sales/invoices", icon: Receipt },
       { name: "Quotations & Estimates", href: "/quotations", icon: FileText },
@@ -121,7 +121,7 @@ export function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
   const handleLogout = () => {
     logoutUser();
     if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      window.location.href = "/";
     }
   };
 
@@ -131,7 +131,7 @@ export function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
       <div className="space-y-3 shrink-0 pb-2">
         {/* Brand Header */}
         <div className="flex items-center px-1 py-0.5">
-          <Link href="/" className="flex items-center gap-2 group">
+          <Link href="/dashboard" className="flex items-center gap-2 group">
             <img
               src="/logo.png"
               alt="लेखा जोखा ENTERPRISE ERP & GST SUITE"

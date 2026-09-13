@@ -79,7 +79,7 @@ export function RbacGuard({
             </Link>
           ) : (
             <Link
-              href="/"
+              href="/dashboard"
               className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl shadow-md transition flex items-center justify-center gap-2"
             >
               <LayoutDashboard className="w-4 h-4" />
@@ -88,7 +88,7 @@ export function RbacGuard({
           )}
 
           <Link
-            href="/login"
+            href="/"
             className="w-full py-2 text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white transition"
           >
             Switch Staff Account

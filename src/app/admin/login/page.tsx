@@ -170,12 +170,12 @@ export default function SuperAdminLoginPage() {
 
         {/* Footer Navigation Link */}
         <div className="flex items-center justify-center gap-4 text-xs text-slate-500">
-          <Link href="/login" className="hover:text-slate-900 font-bold flex items-center gap-1">
+          <Link href="/" className="hover:text-slate-900 font-bold flex items-center gap-1">
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Standard Business Login</span>
           </Link>
           <span>•</span>
-          <Link href="/" className="hover:text-slate-900 font-bold">
+          <Link href="/dashboard" className="hover:text-slate-900 font-bold">
             Client ERP
           </Link>
         </div>

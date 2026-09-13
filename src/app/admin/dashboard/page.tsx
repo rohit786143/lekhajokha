@@ -188,7 +188,7 @@ export default function SuperAdminDashboardPage() {
 
   const handleAdminLogout = () => {
     logoutUser();
-    router.push("/login");
+    router.push("/");
   };
 
   const handleAdminSettingsSave = (e: React.FormEvent) => {

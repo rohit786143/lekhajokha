@@ -202,7 +202,7 @@ export default function PosPage() {
       <header className="no-print h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 flex items-center justify-between shadow-xs shrink-0 z-20">
         <div className="flex items-center gap-3">
           <Link
-            href="/"
+            href="/dashboard"
             className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-400 font-black text-lg transition group shadow-xs"
           >
             <img

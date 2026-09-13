@@ -64,7 +64,7 @@ export default function LoginPage() {
     } else if (role === "STOREKEEPER") {
       router.push("/inventory");
     } else {
-      router.push("/");
+      router.push("/dashboard");
     }
   };
 
@@ -84,7 +84,7 @@ export default function LoginPage() {
       } else if (role === "STOREKEEPER") {
         router.push("/inventory");
       } else {
-        router.push("/");
+        router.push("/dashboard");
       }
     }, 300);
   };
