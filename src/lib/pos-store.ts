@@ -25,6 +25,8 @@ import {
   StaffUser,
   UserRole,
   TenantRegistryItem,
+  TenantPlan,
+  SubscriptionStatus,
   OnboardTenantPayload,
 } from "./types";
 import {
@@ -238,6 +240,7 @@ interface PosState {
   tenants: TenantRegistryItem[];
   onboardTenant: (payload: OnboardTenantPayload) => Promise<{ tenant: TenantRegistryItem; owner: StaffUser }>;
   updateTenantStatus: (tenantId: string, isActive: boolean) => void;
+  updateTenantPlan: (tenantId: string, plan: TenantPlan, status: SubscriptionStatus) => void;
   resetTenantOwnerPassword: (tenantId: string, newPassword: string) => void;
   masqueradeTenant: (tenantItem: TenantRegistryItem) => void;
   switchTenant: (tenantId: string) => void;
@@ -1794,6 +1797,24 @@ export const usePosStore = create<PosState>()(
             tenants: updatedTenants,
             staffUsers: updatedStaff,
           };
+        });
+      },
+
+      updateTenantPlan: (tenantId, plan, status) => {
+        set((state) => {
+          const isActive = status === "ACTIVE";
+          const updatedTenants = state.tenants.map(t => 
+             t.id === tenantId ? { ...t, plan, subscriptionStatus: status, isActive } as TenantRegistryItem : t
+          );
+          
+          let updatedTenant = state.tenant;
+          if (state.tenant.id === tenantId) {
+             updatedTenant = { ...state.tenant, plan, subscriptionStatus: status };
+          }
+          
+          savePermanentVaultData({ tenants: updatedTenants });
+          
+          return { tenants: updatedTenants, tenant: updatedTenant };
         });
       },
 

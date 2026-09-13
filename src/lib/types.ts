@@ -2,7 +2,7 @@
 
 export type UserRole = "SUPER_ADMIN" | "OWNER" | "TENANT_OWNER" | "ACCOUNTANT" | "CASHIER" | "STOREKEEPER";
 
-export type TenantPlan = "BASIC" | "PRO" | "ENTERPRISE";
+export type TenantPlan = "BASIC" | "PRO";
 
 export type SubscriptionStatus = "ACTIVE" | "EXPIRED" | "CANCELLED" | "SUSPENDED";
 

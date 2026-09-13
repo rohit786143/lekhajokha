@@ -48,26 +48,7 @@ const PLAN_FEATURES: Record<TenantPlan, FeatureCode[]> = {
     "inventory_analytics",
     "branch_analytics",
   ],
-  ENTERPRISE: [
-    "basic_billing",
-    "gst_invoice",
-    "single_gstin",
-    "multi_gstin",
-    "eway_bill",
-    "basic_inventory",
-    "batch_inventory",
-    "expiry_tracking",
-    "multi_location_inventory",
-    "pos",
-    "multi_branch",
-    "advanced_users",
-    "basic_reports",
-    "advanced_reports",
-    "business_analytics",
-    "gst_analytics",
-    "inventory_analytics",
-    "branch_analytics",
-  ],
+
 };
 
 export function hasFeature(

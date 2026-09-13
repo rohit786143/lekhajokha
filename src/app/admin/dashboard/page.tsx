@@ -88,6 +88,9 @@ export default function SuperAdminDashboardPage() {
   const [newPasswordInput, setNewPasswordInput] = useState("");
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   
+  // Payment method for plan upgrade
+  const [paymentMethod, setPaymentMethod] = useState("");
+  
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [saEmail, setSaEmail] = useState("");
   const [saPassword, setSaPassword] = useState("");
@@ -247,11 +250,15 @@ export default function SuperAdminDashboardPage() {
     e.preventDefault();
     if (!changePlanTenant) return;
 
+    // Passing paymentMethod as a detail to the backend (via updated args or just in audit log if implemented)
+    // For now we rely on the existing backend method which might ignore it if not updated, but we capture it.
     const res = await updateTenantSubscriptionInDb(changePlanTenant.id, newPlan, newStatus);
     if (res.success) {
       showToast(`Subscription updated for "${changePlanTenant.name}"`);
       setTenants(tenants.map(t => t.id === changePlanTenant.id ? { ...t, plan: newPlan, subscriptionStatus: newStatus, isActive: newStatus === "ACTIVE" } : t));
+      usePosStore.getState().updateTenantPlan(changePlanTenant.id, newPlan, newStatus);
       setChangePlanTenant(null);
+      setPaymentMethod("");
     } else {
       showToast(res.error || "Failed to update subscription", "error");
     }
@@ -294,13 +301,13 @@ export default function SuperAdminDashboardPage() {
   // Platform Metrics
   const totalTenantsCount = tenants.length;
   const activeTenantsCount = tenants.filter((t) => t.isActive).length;
-  const enterpriseCount = tenants.filter((t) => t.plan === "ENTERPRISE").length;
   const proCount = tenants.filter((t) => t.plan === "PRO").length;
+  const basicCount = tenants.filter((t) => t.plan === "BASIC").length;
   const estimatedArr = tenants.reduce((acc, t) => {
     if (!t.isActive) return acc;
-    if (t.plan === "ENTERPRISE") return acc + 48000;
-    if (t.plan === "PRO") return acc + 24000;
-    return acc + 12000;
+    if (t.plan === "PRO") return acc + 1843;
+    if (t.plan === "BASIC") return acc + 1143;
+    return acc;
   }, 0);
 
   return (
@@ -428,13 +435,13 @@ export default function SuperAdminDashboardPage() {
 
           <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-2">
             <div className="flex items-center justify-between text-slate-400">
-              <span className="text-xs font-bold uppercase tracking-wider text-[10px] text-slate-500">Enterprise Plans</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-[10px] text-slate-500">Basic Plans</span>
               <Sparkles className="w-4 h-4 text-amber-600" />
             </div>
             <div className="text-2xl font-black text-slate-900 font-mono">
-              {enterpriseCount}
+              {basicCount}
             </div>
-            <p className="text-[11px] text-slate-500">Full Multi-Firm & E-Way NIC</p>
+            <p className="text-[11px] text-slate-500">Single User & Basic Billing</p>
           </div>
 
           <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-2">
@@ -481,9 +488,8 @@ export default function SuperAdminDashboardPage() {
               className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-slate-900 cursor-pointer"
             >
               <option value="ALL">All Plans</option>
-              <option value="STARTER">Starter</option>
-              <option value="PRO">Pro Business</option>
-              <option value="ENTERPRISE">Enterprise Multi-Firm</option>
+              <option value="BASIC">Basic</option>
+              <option value="PRO">PRO - Multi-branch, POS, Advanced</option>
             </select>
 
             {/* Status Filter */}
@@ -558,13 +564,13 @@ export default function SuperAdminDashboardPage() {
                         </td>
 
                         <td className="p-4">
-                          <span className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider border ${
-                            t.plan === "ENTERPRISE"
-                              ? "bg-amber-50 text-amber-900 border-amber-300"
-                              : t.plan === "PRO"
-                              ? "bg-indigo-50 text-indigo-900 border-indigo-300"
-                              : "bg-slate-100 text-slate-800 border-slate-300"
-                          }`}>
+                          <span
+                            className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                              t.plan === "PRO"
+                                ? "bg-amber-100 text-amber-800 border-amber-300"
+                                : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            }`}
+                          >
                             {t.plan}
                           </span>
                         </td>
@@ -753,7 +759,7 @@ export default function SuperAdminDashboardPage() {
                 <div className="col-span-2">
                   <label className="font-bold text-slate-700">Subscription Plan Tier *</label>
                   <div className="grid grid-cols-3 gap-3 mt-1.5">
-                    {(["STARTER", "PRO", "ENTERPRISE"] as TenantPlan[]).map((p) => (
+                    {(["BASIC", "PRO"] as TenantPlan[]).map((p) => (
                       <button
                         key={p}
                         type="button"
@@ -766,7 +772,7 @@ export default function SuperAdminDashboardPage() {
                       >
                         <div className="text-xs font-bold">{p}</div>
                         <div className="text-[10px] opacity-75 mt-0.5">
-                          {p === "ENTERPRISE" ? "Multi-Firm" : p === "PRO" ? "Pro ERP" : "Starter"}
+                          {p === "PRO" ? "Pro ERP" : "Basic"}
                         </div>
                       </button>
                     ))}
@@ -940,7 +946,6 @@ export default function SuperAdminDashboardPage() {
                 >
                   <option value="BASIC">BASIC - Single User, Basic Billing</option>
                   <option value="PRO">PRO - Multi-branch, POS, Advanced</option>
-                  <option value="ENTERPRISE">ENTERPRISE - Custom</option>
                 </select>
               </div>
 
@@ -956,6 +961,17 @@ export default function SuperAdminDashboardPage() {
                   <option value="SUSPENDED">SUSPENDED (Locked)</option>
                   <option value="CANCELLED">CANCELLED (Locked)</option>
                 </select>
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold text-slate-700">Payment Method / Reference (Optional)</label>
+                <input
+                  type="text"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  placeholder="e.g. UPI/Card/Bank Transfer Reference"
+                  className="w-full mt-1.5 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

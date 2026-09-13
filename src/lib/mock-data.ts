@@ -36,7 +36,7 @@ export const INITIAL_TENANT: TenantInfo = {
   thermalHeader: "★ लेखा जोखा ENTERPRISE ★\nGSTIN: 27AABCU9603R1ZM | Ph: 9820012345\nTax Invoice / Cash Receipt",
   thermalFooter: "Thank you for shopping with us!\nGoods once sold will not be taken back without bill.\nVisit again! Have a great day.",
   termsAndConditions: "1. All disputes are subject to Mumbai Jurisdiction.\n2. Goods once sold will be exchanged within 7 days in original condition.\n3. Interest @ 18% p.a. will be charged if bill is not settled within credit due date.",
-  plan: "ENTERPRISE",
+  plan: "PRO",
   subscriptionStatus: "ACTIVE",
 };
 
@@ -305,7 +305,7 @@ export const INITIAL_TENANTS_REGISTRY: TenantRegistryItem[] = [
     gstin: "27AABCU9603R1ZM",
     stateCode: "27",
     stateName: "Maharashtra",
-    plan: "ENTERPRISE",
+    plan: "PRO",
     subscriptionStatus: "ACTIVE",
     isActive: true,
     ownerName: "Rajesh Sharma",

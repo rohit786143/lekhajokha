@@ -121,7 +121,7 @@ export async function updateTenantStatusInDb(tenantId: string, isActive: boolean
 
 export async function updateTenantSubscriptionInDb(
   tenantId: string,
-  plan: "BASIC" | "PRO" | "ENTERPRISE",
+  plan: "BASIC" | "PRO",
   status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "SUSPENDED"
 ) {
   try {
