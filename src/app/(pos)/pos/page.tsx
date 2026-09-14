@@ -52,6 +52,8 @@ export default function PosPage() {
     placeOfSupply,
     setPlaceOfSupply,
     activeCartItems,
+    saleType,
+    setSaleType,
     billDiscount,
     setBillDiscount,
     autoRoundOff,
@@ -543,12 +545,32 @@ export default function PosPage() {
 
           {/* Cart Section Header Bar with Clear Cart */}
           <div className="px-3 py-1.5 bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs shrink-0">
-            <div className="flex items-center gap-1.5 font-black text-slate-800 dark:text-slate-200">
-              <ShoppingBag className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>Billing Items</span>
-              <span className="px-1.5 py-0.2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-full font-mono text-[10px]">
-                {activeCartItems.length}
-              </span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 font-black text-slate-800 dark:text-slate-200">
+                <ShoppingBag className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Billing Items</span>
+                <span className="px-1.5 py-0.2 bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 rounded-full font-mono text-[10px]">
+                  {activeCartItems.length}
+                </span>
+              </div>
+              <div className="h-4 w-px bg-slate-300 dark:bg-slate-700" />
+              {/* Sale Type Toggle */}
+              <div className="flex items-center bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-700 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSaleType("RETAIL")}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${saleType === "RETAIL" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+                >
+                  Retail
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSaleType("WHOLESALE")}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${saleType === "WHOLESALE" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300" : "text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+                >
+                  Wholesale
+                </button>
+              </div>
             </div>
             {activeCartItems.length > 0 && (
               <button
@@ -742,10 +764,23 @@ export default function PosPage() {
           {/* Cart Bottom Summary & Checkout Panel */}
           <div className="p-2.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 space-y-2">
             {/* Calculation summary rows */}
+            {/* Calculation summary rows */}
             <div className="space-y-0.5 text-xs">
-              <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+              <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px] items-center">
                 <span>Subtotal ({calc.totalQuantity} items):</span>
                 <span className="font-mono font-semibold">{formatCurrency(calc.subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px] items-center py-0.5">
+                <span>Bill Discount (₹):</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={billDiscount || ""}
+                  onChange={(e) => setBillDiscount(Number(e.target.value) || 0)}
+                  placeholder="₹0.00"
+                  className="w-24 px-1.5 py-0.5 text-right font-mono border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-indigo-500"
+                />
               </div>
               <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px]">
                 <span>Taxable Amount:</span>

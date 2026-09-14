@@ -139,6 +139,7 @@ interface PosState {
   activeCartItems: CartItem[];
   billDiscount: number;
   autoRoundOff: boolean;
+  saleType: "RETAIL" | "WHOLESALE";
 
   // Multi-cart Parking
   parkedCarts: ParkedCart[];
@@ -156,6 +157,7 @@ interface PosState {
   setPlaceOfSupply: (stateCode: string) => void;
   setBillDiscount: (amount: number) => void;
   toggleAutoRoundOff: () => void;
+  setSaleType: (type: "RETAIL" | "WHOLESALE") => void;
 
   addItemToCart: (product: Product, batch?: ProductBatch, serials?: string[], qty?: number) => void;
   updateCartItemQty: (itemId: string, qty: number) => void;
@@ -276,6 +278,7 @@ export const usePosStore = create<PosState>()(
       activeCartItems: [],
       billDiscount: 0,
       autoRoundOff: true,
+      saleType: "RETAIL",
 
       parkedCarts: [],
 
@@ -305,6 +308,28 @@ export const usePosStore = create<PosState>()(
       setPlaceOfSupply: (placeOfSupply) => set({ placeOfSupply }),
       setBillDiscount: (billDiscount) => set({ billDiscount: Math.max(0, billDiscount) }),
       toggleAutoRoundOff: () => set((state) => ({ autoRoundOff: !state.autoRoundOff })),
+      
+      setSaleType: (type) => {
+        set({ saleType: type });
+        // Recalculate prices for existing cart items based on new sale type
+        const { activeCartItems = [], tenant, placeOfSupply } = get();
+        if (activeCartItems.length === 0) return;
+        
+        const isInterState = isInterStateTransaction(
+          tenant?.stateCode || "27",
+          placeOfSupply || "27"
+        );
+        
+        const updated = activeCartItems.map((it) => {
+          const unitPrice = type === "WHOLESALE" 
+            ? (it.selectedBatch?.wholesalePrice ?? it.product.wholesalePrice ?? it.product.salePrice ?? 0)
+            : (it.selectedBatch?.salePrice ?? it.product.salePrice ?? 0);
+            
+          return calculateLineItem({ ...it, unitPrice }, isInterState);
+        });
+        
+        set({ activeCartItems: updated });
+      },
 
       addItemToCart: (product, batch, serials, qty = 1) => {
         try {
@@ -376,7 +401,10 @@ export const usePosStore = create<PosState>()(
             set({ activeCartItems: updated });
           } else {
             const initialQty = Math.min(maxStock, Math.max(1, qty));
-            const unitPrice = selectedBatch ? selectedBatch.salePrice : (product.salePrice ?? 0);
+            const { saleType } = get();
+            const unitPrice = saleType === "WHOLESALE"
+              ? (selectedBatch?.wholesalePrice ?? product.wholesalePrice ?? product.salePrice ?? 0)
+              : (selectedBatch?.salePrice ?? product.salePrice ?? 0);
             const mrp = selectedBatch ? selectedBatch.mrp : (product.mrp ?? unitPrice);
             const newItemBase = {
               id: `line-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,

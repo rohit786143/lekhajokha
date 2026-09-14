@@ -259,6 +259,7 @@ model ProductBatch {
   stockQty      Float         @default(0.0)
   purchasePrice Float         @default(0.0)
   salePrice     Float         @default(0.0)
+  wholesalePrice Float        @default(0.0)
   mrp           Float         @default(0.0)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt

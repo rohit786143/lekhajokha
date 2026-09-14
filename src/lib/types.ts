@@ -152,6 +152,7 @@ export interface ProductBatch {
   stockQty: number;
   purchasePrice: number;
   salePrice: number;
+  wholesalePrice?: number;
   mrp: number;
 }
 

@@ -56,6 +56,7 @@ export default function InventoryPage() {
   const [newProdTaxRate, setNewProdTaxRate] = useState(18);
   const [newProdPurchasePrice, setNewProdPurchasePrice] = useState(0);
   const [newProdSalePrice, setNewProdSalePrice] = useState(0);
+  const [newProdWholesalePrice, setNewProdWholesalePrice] = useState(0);
   const [newProdMrp, setNewProdMrp] = useState(0);
   const [newProdStock, setNewProdStock] = useState(10);
   const [newProdTrackBatch, setNewProdTrackBatch] = useState(false);
@@ -162,6 +163,7 @@ export default function InventoryPage() {
     setNewProdHsn(defaultCat?.hsnCode ?? "9999");
     setNewProdPurchasePrice(0);
     setNewProdSalePrice(0);
+    setNewProdWholesalePrice(0);
     setNewProdMrp(0);
     setNewProdStock(10);
     setNewProdTrackBatch(false);
@@ -205,6 +207,7 @@ export default function InventoryPage() {
       isTaxInclusive: true,
       purchasePrice: Number(newProdPurchasePrice) || 0,
       salePrice: Number(newProdSalePrice) || 0,
+      wholesalePrice: Number(newProdWholesalePrice) || 0,
       mrp: Number(newProdMrp) || Number(newProdSalePrice) || 0,
       minStock: 5,
       currentStock: Number(newProdStock) || 0,
@@ -223,6 +226,7 @@ export default function InventoryPage() {
               stockQty: Number(newProdStock) || 0,
               purchasePrice: Number(newProdPurchasePrice) || 0,
               salePrice: Number(newProdSalePrice) || 0,
+              wholesalePrice: Number(newProdWholesalePrice) || 0,
               mrp: Number(newProdMrp) || 0,
             },
           ]
@@ -882,10 +886,10 @@ export default function InventoryPage() {
                   />
                 </div>
 
-                {/* Sale Price */}
+                {/* Retail Sale Price */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Wholesale / Retail Sale Price (₹) <span className="text-rose-500">*</span>
+                    Retail Sale Price (₹) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -896,6 +900,22 @@ export default function InventoryPage() {
                     onChange={(e) => setNewProdSalePrice(Number(e.target.value))}
                     placeholder="0.00"
                     className="w-full px-3 py-2 text-xs font-mono font-black text-indigo-600 dark:text-indigo-400 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Wholesale Price */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Wholesale Price (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newProdWholesalePrice || ""}
+                    onChange={(e) => setNewProdWholesalePrice(Number(e.target.value))}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 text-xs font-mono font-black text-purple-600 dark:text-purple-400 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                   />
                 </div>
 
