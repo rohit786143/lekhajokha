@@ -71,19 +71,19 @@ export default function NewPurchasePage() {
 
   const [rows, setRows] = useState<PurchaseRow[]>([
     {
-      productId: products[0]?.id || "",
-      productName: products[0]?.name || "",
-      sku: products[0]?.sku || "",
-      hsn: products[0]?.hsn || "9999",
-      unit: products[0]?.unit || "PCS",
+      productId: "",
+      productName: "",
+      sku: "",
+      hsn: "",
+      unit: "PCS",
       batchNo: "",
       mfgDate: "",
       expDate: "",
-      quantity: 10,
-      purchasePrice: products[0]?.purchasePrice || 100,
-      mrp: products[0]?.mrp || 150,
-      salePrice: products[0]?.salePrice || 130,
-      taxRate: products[0]?.taxRate || 18,
+      quantity: 1,
+      purchasePrice: 0,
+      mrp: 0,
+      salePrice: 0,
+      taxRate: 0,
     },
   ]);
 
@@ -113,24 +113,23 @@ export default function NewPurchasePage() {
   };
 
   const handleAddRow = () => {
-    const defaultProd = products[0];
     setRows([
       ...rows,
       {
-        productId: defaultProd?.id || "",
-        productName: defaultProd?.name || "",
-        sku: defaultProd?.sku || "",
-        hsn: defaultProd?.hsn || "9999",
-        unit: defaultProd?.unit || "PCS",
+        productId: "",
+        productName: "",
+        sku: "",
+        hsn: "",
+        unit: "PCS",
         batchNo: "",
         mfgDate: "",
         expDate: "",
         quantity: 1,
-        purchasePrice: defaultProd?.purchasePrice || 0,
-        mrp: defaultProd?.mrp || 0,
-        salePrice: defaultProd?.salePrice || 0,
-        taxRate: defaultProd?.taxRate || 18,
-      },
+        purchasePrice: 0,
+        mrp: 0,
+        salePrice: 0,
+        taxRate: 0,
+      }
     ]);
   };
 

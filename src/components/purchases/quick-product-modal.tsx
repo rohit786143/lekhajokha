@@ -42,9 +42,10 @@ export function QuickProductModal({
   const [unit, setUnit] = useState("PCS");
   const [hsn, setHsn] = useState("9999");
   const [taxRate, setTaxRate] = useState<number>(18);
-  const [purchasePrice, setPurchasePrice] = useState<number>(0);
-  const [salePrice, setSalePrice] = useState<number>(0);
-  const [mrp, setMrp] = useState<number>(0);
+  const [purchasePrice, setPurchasePrice] = useState<number | "">("");
+  const [salePrice, setSalePrice] = useState<number | "">("");
+  const [wholesalePrice, setWholesalePrice] = useState<number | "">("");
+  const [mrp, setMrp] = useState<number | "">("");
 
   if (!isOpen) return null;
 
@@ -88,8 +89,13 @@ export function QuickProductModal({
       return;
     }
 
+    if (!categoryId) {
+      alert("Please select a Product Category first.");
+      return;
+    }
+
     const finalSku = sku.trim() || generateSku("GEN", name);
-    const finalMrp = mrp > 0 ? mrp : (salePrice > 0 ? salePrice : purchasePrice * 1.25);
+    const finalMrp = Number(mrp) > 0 ? Number(mrp) : (Number(salePrice) > 0 ? Number(salePrice) : Number(purchasePrice) * 1.25);
 
     const newProduct: Product = {
       id: `prod-${Date.now()}`,
@@ -103,6 +109,7 @@ export function QuickProductModal({
       taxRate: Number(taxRate) || 18,
       purchasePrice: Number(purchasePrice) || 0,
       salePrice: Number(salePrice) || 0,
+      wholesalePrice: Number(wholesalePrice) || 0,
       mrp: Number(finalMrp) || 0,
       currentStock: 0,
       minStock: 5,
@@ -176,14 +183,15 @@ export function QuickProductModal({
 
             <div className="space-y-1">
               <label className="font-bold text-slate-700 dark:text-slate-300">
-                Category
+                Category *
               </label>
               <select
                 value={categoryId}
                 onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold"
+                required
               >
-                <option value="">-- General Category --</option>
+                {categories.length === 0 && <option value="">No Categories Found</option>}
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name} ({c.defaultGstRate}% GST)
@@ -248,45 +256,61 @@ export function QuickProductModal({
           </div>
 
           {/* Row 3: Rates */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="font-bold text-slate-700 dark:text-slate-300">
-                Default Purchase Rate (₹)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={purchasePrice}
-                onChange={(e) => setPurchasePrice(Number(e.target.value))}
-                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono font-bold"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="font-bold text-slate-700 dark:text-slate-300">
-                Sale Price (₹)
+                Sale Price (Retail) ₹
               </label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={salePrice}
-                onChange={(e) => setSalePrice(Number(e.target.value))}
+                onChange={(e) => setSalePrice(e.target.value ? Number(e.target.value) : "")}
                 className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono font-bold"
               />
             </div>
 
             <div className="space-y-1">
               <label className="font-bold text-slate-700 dark:text-slate-300">
-                MRP (₹)
+                Wholesale Price ₹
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={wholesalePrice}
+                onChange={(e) => setWholesalePrice(e.target.value ? Number(e.target.value) : "")}
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono font-bold text-purple-600 dark:text-purple-400"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 dark:text-slate-300">
+                Default Purchase Rate ₹
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={purchasePrice}
+                onChange={(e) => setPurchasePrice(e.target.value ? Number(e.target.value) : "")}
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono font-bold"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700 dark:text-slate-300">
+                MRP ₹
               </label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
                 value={mrp}
-                onChange={(e) => setMrp(Number(e.target.value))}
+                onChange={(e) => setMrp(e.target.value ? Number(e.target.value) : "")}
                 className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl font-mono font-bold"
               />
             </div>
