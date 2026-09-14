@@ -22,10 +22,11 @@ import {
   X,
   CreditCard,
   ShoppingBag,
+  Trash2,
 } from "lucide-react";
 
 export default function PurchasesPage() {
-  const { tenant } = usePosStore();
+  const { tenant, deletePurchaseInvoice } = usePosStore();
   const { purchaseInvoices, parties, products } = useTenantData();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPurchase, setSelectedPurchase] = useState<PurchaseInvoice | null>(null);
@@ -226,16 +227,30 @@ export default function PurchasesPage() {
                       </span>
                     </td>
                     <td className="p-3 text-center">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedPurchase(pur);
-                        }}
-                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded-lg transition"
-                      >
-                        <Receipt className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPurchase(pur);
+                          }}
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded-lg transition"
+                        >
+                          <Receipt className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm("Are you sure you want to delete this inward bill?")) {
+                              deletePurchaseInvoice(pur.id);
+                            }
+                          }}
+                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

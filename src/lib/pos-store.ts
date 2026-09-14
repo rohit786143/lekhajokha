@@ -209,6 +209,7 @@ interface PosState {
 
   // Purchase Inward Actions
   addPurchaseInvoice: (purchase: PurchaseInvoice) => void;
+  deletePurchaseInvoice: (id: string) => void;
 
   // Quotation Actions
   addQuotation: (quotation: Quotation) => void;
@@ -1217,6 +1218,12 @@ export const usePosStore = create<PosState>()(
           products: updatedProducts,
           parties: updatedParties,
         });
+      },
+
+      deletePurchaseInvoice: (id) => {
+        set((state) => ({
+          purchaseInvoices: state.purchaseInvoices.filter((p) => p.id !== id),
+        }));
       },
 
       addQuotation: (quotation) => {
