@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePosStore } from "@/lib/pos-store";
 import { useTenantData } from "@/lib/use-tenant-data";
@@ -19,6 +19,8 @@ import {
   Send,
   Trash2,
   Zap,
+  Edit3,
+  Eye,
 } from "lucide-react";
 
 export default function QuotationsPage() {
@@ -37,6 +39,24 @@ export default function QuotationsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [previewQuotation, setPreviewQuotation] = useState<Quotation | null>(null);
   const [conversionSuccessMsg, setConversionSuccessMsg] = useState<string | null>(null);
+
+  // Edit quotation state
+  const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
+  const [editPartyId, setEditPartyId] = useState<string>("");
+  const [editQuoteNo, setEditQuoteNo] = useState<string>("");
+  const [editValidDays, setEditValidDays] = useState<number>(15);
+  const [editItems, setEditItems] = useState<
+    {
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      discountPercent: number;
+      taxRate: number;
+    }[]
+  >([]);
+
+  // Print preview ref
+  const printIframeRef = useRef<HTMLIFrameElement | null>(null);
 
   // New quotation form state
   const [partyId, setPartyId] = useState<string>(tenantParties[0]?.id || "");
@@ -104,15 +124,13 @@ export default function QuotationsPage() {
     setQuoteItems(newItems);
   };
 
-  const handleCreateQuotation = (e: React.FormEvent) => {
-    e.preventDefault();
-    const selParty = parties.find((p) => p.id === partyId);
-
+  // Helper: calculate quotation from items array
+  const calculateQuotationTotals = (items: typeof quoteItems) => {
     let subtotal = 0;
     let discountTotal = 0;
     let taxAmount = 0;
 
-    const calculatedItems: QuotationItem[] = quoteItems.map((item, idx) => {
+    const calculatedItems: QuotationItem[] = items.map((item, idx) => {
       const prod = products.find((p) => p.id === item.productId);
       const base = item.quantity * item.unitPrice;
       const disc = base * (item.discountPercent / 100);
@@ -147,6 +165,15 @@ export default function QuotationsPage() {
     const grandTotal = Math.round(rawGrandTotal);
     const roundOff = grandTotal - rawGrandTotal;
 
+    return { calculatedItems, subtotal, discountTotal, taxableAmount, taxAmount, roundOff, grandTotal };
+  };
+
+  const handleCreateQuotation = (e: React.FormEvent) => {
+    e.preventDefault();
+    const selParty = parties.find((p) => p.id === partyId);
+    const { calculatedItems, subtotal, discountTotal, taxableAmount, taxAmount, roundOff, grandTotal } =
+      calculateQuotationTotals(quoteItems);
+
     const validUntilDate = new Date();
     validUntilDate.setDate(validUntilDate.getDate() + validDays);
 
@@ -175,6 +202,235 @@ export default function QuotationsPage() {
     setIsCreateModalOpen(false);
     setQuoteNo(`EST-${Date.now().toString().slice(-5)}`);
   };
+
+  // ── Edit Quotation Handlers ──
+  const openEditModal = (q: Quotation) => {
+    setEditingQuotation(q);
+    setEditPartyId(q.partyId || tenantParties[0]?.id || "");
+    setEditQuoteNo(q.quoteNo);
+    // Calculate remaining valid days from validUntil
+    if (q.validUntil) {
+      const diff = Math.ceil((new Date(q.validUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      setEditValidDays(Math.max(1, diff));
+    } else {
+      setEditValidDays(15);
+    }
+    setEditItems(
+      q.items.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        discountPercent: it.discountPercent,
+        taxRate: it.taxRate,
+      }))
+    );
+  };
+
+  const handleEditItemChange = (index: number, field: string, value: any) => {
+    const newItems = [...editItems];
+    if (field === "productId") {
+      const prod = products.find((p) => p.id === value);
+      newItems[index] = {
+        ...newItems[index],
+        productId: value,
+        unitPrice: prod?.salePrice || 0,
+        taxRate: prod?.taxRate || 18,
+      };
+    } else {
+      newItems[index] = { ...newItems[index], [field]: value };
+    }
+    setEditItems(newItems);
+  };
+
+  const handleEditAddItem = () => {
+    const defaultP = tenantProducts[0];
+    setEditItems([
+      ...editItems,
+      {
+        productId: defaultP?.id || "",
+        quantity: 1,
+        unitPrice: defaultP?.salePrice || 100,
+        discountPercent: 0,
+        taxRate: defaultP?.taxRate || 18,
+      },
+    ]);
+  };
+
+  const handleEditRemoveItem = (index: number) => {
+    if (editItems.length === 1) return;
+    setEditItems(editItems.filter((_, i) => i !== index));
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQuotation) return;
+
+    const selParty = parties.find((p) => p.id === editPartyId);
+    const { calculatedItems, subtotal, discountTotal, taxableAmount, taxAmount, roundOff, grandTotal } =
+      calculateQuotationTotals(editItems);
+
+    const validUntilDate = new Date();
+    validUntilDate.setDate(validUntilDate.getDate() + editValidDays);
+
+    const updatedQuotation: Quotation = {
+      ...editingQuotation,
+      partyId: editPartyId,
+      partyName: selParty?.name || "Customer",
+      partyGstin: selParty?.gstin,
+      partyPhone: selParty?.phone,
+      quoteNo: editQuoteNo,
+      validUntil: validUntilDate.toISOString().split("T")[0],
+      subtotal,
+      discountTotal,
+      taxableAmount,
+      taxAmount,
+      roundOff,
+      grandTotal,
+      items: calculatedItems,
+    };
+
+    updateQuotation(updatedQuotation);
+    setEditingQuotation(null);
+
+    // Also update preview if same quotation is open
+    if (previewQuotation?.id === updatedQuotation.id) {
+      setPreviewQuotation(updatedQuotation);
+    }
+
+    setConversionSuccessMsg(`Quotation ${updatedQuotation.quoteNo} updated successfully!`);
+    setTimeout(() => setConversionSuccessMsg(null), 4000);
+  };
+
+  // ── Print Preview via iframe ──
+  const handlePrintQuotation = useCallback((q: Quotation) => {
+    const printWindow = window.open("", "_blank", "width=800,height=600");
+    if (!printWindow) {
+      alert("Please allow pop-ups to print quotations.");
+      return;
+    }
+
+    const itemsHtml = q.items
+      .map(
+        (it, idx) => `
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;">${idx + 1}</td>
+          <td style="padding:8px;border-bottom:1px solid #e2e8f0;">
+            <div style="font-weight:700;">${it.productName}</div>
+            <div style="font-size:10px;color:#94a3b8;">HSN: ${it.hsn} | SKU: ${it.sku}</div>
+          </td>
+          <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.quantity} ${it.unit}</td>
+          <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:monospace;">₹${it.unitPrice.toFixed(2)}</td>
+          <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.discountPercent}%</td>
+          <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;">${it.taxRate}%</td>
+          <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:right;font-family:monospace;font-weight:700;">₹${it.total.toFixed(2)}</td>
+        </tr>`
+      )
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Quotation - ${q.quoteNo}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; padding: 32px; background: #fff; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #4f46e5; padding-bottom: 16px; margin-bottom: 24px; }
+    .company-name { font-size: 22px; font-weight: 900; color: #4f46e5; }
+    .company-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .doc-title { text-align: right; }
+    .doc-title h2 { font-size: 20px; font-weight: 900; color: #1e293b; letter-spacing: 1px; }
+    .doc-title .quote-no { font-family: monospace; font-size: 14px; color: #4f46e5; font-weight: 700; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .meta-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+    .meta-label { font-size: 9px; text-transform: uppercase; font-weight: 700; color: #94a3b8; letter-spacing: 1px; }
+    .meta-value { font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; }
+    th { background: #4f46e5; color: #fff; padding: 10px 8px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800; }
+    th:first-child { border-radius: 6px 0 0 0; }
+    th:last-child { border-radius: 0 6px 0 0; text-align: right; }
+    .totals { display: flex; justify-content: flex-end; }
+    .totals-box { width: 280px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+    .total-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+    .total-row.grand { border-top: 2px solid #4f46e5; margin-top: 6px; padding-top: 8px; font-size: 15px; font-weight: 900; color: #4f46e5; }
+    .footer { margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 12px; }
+    @media print {
+      body { padding: 16px; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="company-name">${tenant.name || 'लेखा जोखा Enterprise'}</div>
+      <div class="company-sub">GSTIN: ${tenant.gstin || 'UNREGISTERED'}</div>
+      <div class="company-sub">${tenant.address || ''}</div>
+    </div>
+    <div class="doc-title">
+      <h2>QUOTATION / ESTIMATE</h2>
+      <div class="quote-no">${q.quoteNo}</div>
+    </div>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-card">
+      <div class="meta-label">Customer / Party</div>
+      <div class="meta-value">${q.partyName || 'Walk-in Customer'}</div>
+      ${q.partyGstin ? `<div style="font-size:10px;color:#64748b;margin-top:2px;">GSTIN: ${q.partyGstin}</div>` : ''}
+      ${q.partyPhone ? `<div style="font-size:10px;color:#64748b;">Phone: ${q.partyPhone}</div>` : ''}
+    </div>
+    <div class="meta-card" style="text-align:right;">
+      <div class="meta-label">Quotation Date</div>
+      <div class="meta-value">${new Date(q.quoteDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+      <div class="meta-label" style="margin-top:8px;">Valid Until</div>
+      <div class="meta-value">${q.validUntil ? new Date(q.validUntil).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '15 Days'}</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:center;width:40px;">#</th>
+        <th>Product / Service</th>
+        <th style="text-align:center;">Qty</th>
+        <th style="text-align:right;">Rate</th>
+        <th style="text-align:center;">Disc%</th>
+        <th style="text-align:center;">GST%</th>
+        <th style="text-align:right;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsHtml}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <div class="totals-box">
+      <div class="total-row"><span>Subtotal</span><span style="font-family:monospace;">₹${q.subtotal.toFixed(2)}</span></div>
+      <div class="total-row"><span>Discount</span><span style="font-family:monospace;color:#ef4444;">-₹${q.discountTotal.toFixed(2)}</span></div>
+      <div class="total-row"><span>Taxable Amount</span><span style="font-family:monospace;">₹${q.taxableAmount.toFixed(2)}</span></div>
+      <div class="total-row"><span>GST</span><span style="font-family:monospace;">₹${q.taxAmount.toFixed(2)}</span></div>
+      ${q.roundOff !== 0 ? `<div class="total-row"><span>Round Off</span><span style="font-family:monospace;">₹${q.roundOff.toFixed(2)}</span></div>` : ''}
+      <div class="total-row grand"><span>Grand Total</span><span>₹${q.grandTotal.toFixed(2)}</span></div>
+    </div>
+  </div>
+
+  ${q.notes ? `<div style="margin-top:20px;font-size:11px;"><strong>Notes:</strong> ${q.notes}</div>` : ''}
+  ${q.terms ? `<div style="margin-top:6px;font-size:11px;"><strong>Terms:</strong> ${q.terms}</div>` : ''}
+
+  <div class="footer">
+    This is a computer-generated quotation. | Powered by लेखा जोखा Enterprise ERP
+  </div>
+
+  <div class="no-print" style="text-align:center;margin-top:24px;">
+    <button onclick="window.print()" style="padding:10px 32px;background:#4f46e5;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;">🖨️ Print Now</button>
+  </div>
+</body>
+</html>`;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }, [tenant]);
 
   const handleConvert = (quote: Quotation) => {
     if (quote.status === "CONVERTED_TO_INVOICE") {
@@ -301,6 +557,7 @@ export default function QuotationsPage() {
                   <th className="p-3">Valid Until</th>
                   <th className="p-3 text-right">Grand Total</th>
                   <th className="p-3">Status</th>
+                  <th className="p-3 text-center">Actions</th>
                   <th className="p-3 text-center">1-Click Conversion</th>
                 </tr>
               </thead>
@@ -334,6 +591,36 @@ export default function QuotationsPage() {
                       >
                         {q.status === "CONVERTED_TO_INVOICE" ? "CONVERTED" : q.status}
                       </span>
+                    </td>
+                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1.5">
+                        {q.status !== "CONVERTED_TO_INVOICE" && (
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(q)}
+                            title="Edit Quotation"
+                            className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg transition active:scale-90"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handlePrintQuotation(q)}
+                          title="Print Preview"
+                          className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg transition active:scale-90"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewQuotation(q)}
+                          title="View Details"
+                          className="p-1.5 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg transition active:scale-90"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                     <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                       {q.status === "CONVERTED_TO_INVOICE" ? (
@@ -576,7 +863,7 @@ export default function QuotationsPage() {
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => handlePrintQuotation(previewQuotation)}
                 className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl flex items-center gap-1.5"
               >
                 <Printer className="w-4 h-4" />
@@ -584,16 +871,227 @@ export default function QuotationsPage() {
               </button>
 
               {previewQuotation.status !== "CONVERTED_TO_INVOICE" && (
-                <button
-                  type="button"
-                  onClick={() => handleConvert(previewQuotation)}
-                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>1-Click Convert to Tax Invoice</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openEditModal(previewQuotation);
+                      setPreviewQuotation(null);
+                    }}
+                    className="px-4 py-2.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold text-xs rounded-xl flex items-center gap-1.5 transition"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleConvert(previewQuotation)}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition"
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span>1-Click Convert to Tax Invoice</span>
+                  </button>
+                </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ EDIT QUOTATION MODAL ═══════════════ */}
+      {editingQuotation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+          <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-950/50 rounded-xl">
+                  <Edit3 className="w-5 h-5 text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Edit Quotation
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono">{editingQuotation.quoteNo}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingQuotation(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Customer / Party
+                  </label>
+                  <select
+                    value={editPartyId}
+                    onChange={(e) => setEditPartyId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
+                  >
+                    {tenantParties.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Estimate No
+                  </label>
+                  <input
+                    type="text"
+                    value={editQuoteNo}
+                    onChange={(e) => setEditQuoteNo(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Quoted Products & Pricing
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleEditAddItem}
+                    className="text-xs font-bold text-indigo-600 hover:underline"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-[260px] overflow-y-auto">
+                  {editItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-800 grid grid-cols-12 gap-2 items-center text-xs"
+                    >
+                      <div className="col-span-5">
+                        <select
+                          value={item.productId}
+                          onChange={(e) => handleEditItemChange(idx, "productId", e.target.value)}
+                          className="w-full p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold"
+                        >
+                          {tenantProducts.length === 0 ? (
+                            <option value="">No products in inventory</option>
+                          ) : (
+                            tenantProducts.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Qty"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            handleEditItemChange(idx, "quantity", Math.max(1, Number(e.target.value)))
+                          }
+                          className="w-full p-2 text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-bold font-mono"
+                        />
+                      </div>
+
+                      <div className="col-span-2">
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Rate"
+                          value={item.unitPrice}
+                          onChange={(e) =>
+                            handleEditItemChange(idx, "unitPrice", Number(e.target.value))
+                          }
+                          className="w-full p-2 text-right bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg font-mono font-bold"
+                        />
+                      </div>
+
+                      <div className="col-span-2 text-right font-mono font-black text-indigo-600">
+                        {formatCurrency(item.quantity * item.unitPrice * (1 + item.taxRate / 100))}
+                      </div>
+
+                      <div className="col-span-1 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleEditRemoveItem(idx)}
+                          disabled={editItems.length === 1}
+                          className="p-1 text-slate-400 hover:text-rose-500 disabled:opacity-30"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Edit Totals Preview */}
+              <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-3 space-y-1 text-xs">
+                <div className="flex justify-between text-slate-500">
+                  <span>Subtotal</span>
+                  <span className="font-mono font-bold">
+                    {formatCurrency(
+                      editItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-500">
+                  <span>GST</span>
+                  <span className="font-mono font-bold">
+                    {formatCurrency(
+                      editItems.reduce(
+                        (s, i) => s + i.quantity * i.unitPrice * (i.taxRate / 100),
+                        0
+                      )
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between font-black text-sm text-indigo-600 pt-1 border-t border-slate-200 dark:border-slate-700">
+                  <span>Estimated Total</span>
+                  <span className="font-mono">
+                    {formatCurrency(
+                      Math.round(
+                        editItems.reduce(
+                          (s, i) =>
+                            s + i.quantity * i.unitPrice * (1 + i.taxRate / 100),
+                          0
+                        )
+                      )
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingQuotation(null)}
+                  className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Save Changes</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
