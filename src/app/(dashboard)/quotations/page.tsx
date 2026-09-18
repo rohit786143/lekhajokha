@@ -413,8 +413,13 @@ export default function QuotationsPage() {
     </tbody>
   </table>
 
-  <div class="totals">
-    <div class="totals-box">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:10px;">
+    <div style="width:60%; padding-right:20px;">
+      ${q.terms ? `<div style="font-size:10px; color:#475569;"><strong>Terms & Conditions:</strong><br/><div style="margin-top:4px; line-height:1.4;">${q.terms.replace(/\n/g, '<br/>')}</div></div>` : ''}
+      ${q.notes ? `<div style="margin-top:12px;font-size:10px; color:#475569;"><strong>Notes:</strong> ${q.notes}</div>` : ''}
+    </div>
+    
+    <div class="totals-box" style="flex-shrink:0;">
       <div class="total-row"><span>Subtotal</span><span style="font-family:monospace;">₹${q.subtotal.toFixed(2)}</span></div>
       <div class="total-row"><span>Discount</span><span style="font-family:monospace;color:#ef4444;">-₹${q.discountTotal.toFixed(2)}</span></div>
       <div class="total-row"><span>Taxable Amount</span><span style="font-family:monospace;">₹${q.taxableAmount.toFixed(2)}</span></div>
@@ -424,12 +429,7 @@ export default function QuotationsPage() {
     </div>
   </div>
 
-  ${q.notes ? `<div style="margin-top:20px;font-size:11px;"><strong>Notes:</strong> ${q.notes}</div>` : ''}
-
-  <div style="display:flex; justify-content:space-between; margin-top:40px; border-top:1px dashed #e2e8f0; padding-top:20px;">
-    <div style="width:50%;">
-      ${q.terms ? `<div style="font-size:11px;"><strong>Terms & Conditions:</strong><br/>${q.terms.replace(/\n/g, '<br/>')}</div>` : ''}
-    </div>
+  <div style="display:flex; justify-content:flex-end; margin-top:40px; padding-top:20px;">
     <div style="width:40%; text-align:center;">
       <div style="font-weight:700; font-size:12px; margin-bottom:40px;">For ${tenant.name || 'लेखा जोखा Enterprise'}</div>
       <div style="border-top:1px solid #1e293b; display:inline-block; padding-top:4px; font-size:11px;">Authorized Signatory</div>
