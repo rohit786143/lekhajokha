@@ -197,6 +197,7 @@ export default function QuotationsPage() {
       discountTotal,
       taxableAmount,
       taxAmount,
+      roundOff,
       grandTotal,
       status: "DRAFT",
       items: calculatedItems,
