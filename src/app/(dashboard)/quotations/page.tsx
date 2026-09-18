@@ -45,6 +45,7 @@ export default function QuotationsPage() {
   const [editPartyId, setEditPartyId] = useState<string>("");
   const [editQuoteNo, setEditQuoteNo] = useState<string>("");
   const [editValidDays, setEditValidDays] = useState<number>(15);
+  const [editTerms, setEditTerms] = useState<string>("");
   const [editItems, setEditItems] = useState<
     {
       productId: string;
@@ -62,6 +63,7 @@ export default function QuotationsPage() {
   const [partyId, setPartyId] = useState<string>(tenantParties[0]?.id || "");
   const [quoteNo, setQuoteNo] = useState<string>(`EST-${Date.now().toString().slice(-5)}`);
   const [validDays, setValidDays] = useState<number>(15);
+  const [terms, setTerms] = useState<string>("1. Goods once sold will not be taken back.\n2. Warranty as per manufacturer terms.");
   const [quoteItems, setQuoteItems] = useState<
     {
       productId: string;
@@ -132,7 +134,11 @@ export default function QuotationsPage() {
 
     const calculatedItems: QuotationItem[] = items.map((item, idx) => {
       const prod = products.find((p) => p.id === item.productId);
-      const base = item.quantity * item.unitPrice;
+      
+      const inclusivePrice = item.unitPrice;
+      const exclusivePrice = inclusivePrice / (1 + item.taxRate / 100);
+      
+      const base = item.quantity * exclusivePrice;
       const disc = base * (item.discountPercent / 100);
       const taxable = Math.max(0, base - disc);
       const tax = taxable * (item.taxRate / 100);
@@ -150,7 +156,7 @@ export default function QuotationsPage() {
         hsn: prod?.hsn || "9999",
         unit: prod?.unit || "PCS",
         quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        unitPrice: inclusivePrice,
         discountPercent: item.discountPercent,
         discountAmount: disc,
         taxRate: item.taxRate,
@@ -191,10 +197,10 @@ export default function QuotationsPage() {
       discountTotal,
       taxableAmount,
       taxAmount,
-      roundOff,
       grandTotal,
       status: "DRAFT",
       items: calculatedItems,
+      terms,
       createdAt: new Date().toISOString(),
     };
 
@@ -215,6 +221,7 @@ export default function QuotationsPage() {
     } else {
       setEditValidDays(15);
     }
+    setEditTerms(q.terms || "");
     setEditItems(
       q.items.map((it) => ({
         productId: it.productId,
@@ -286,6 +293,7 @@ export default function QuotationsPage() {
       taxAmount,
       roundOff,
       grandTotal,
+      terms: editTerms,
       items: calculatedItems,
     };
 
@@ -416,7 +424,16 @@ export default function QuotationsPage() {
   </div>
 
   ${q.notes ? `<div style="margin-top:20px;font-size:11px;"><strong>Notes:</strong> ${q.notes}</div>` : ''}
-  ${q.terms ? `<div style="margin-top:6px;font-size:11px;"><strong>Terms:</strong> ${q.terms}</div>` : ''}
+
+  <div style="display:flex; justify-content:space-between; margin-top:40px; border-top:1px dashed #e2e8f0; padding-top:20px;">
+    <div style="width:50%;">
+      ${q.terms ? `<div style="font-size:11px;"><strong>Terms & Conditions:</strong><br/>${q.terms.replace(/\n/g, '<br/>')}</div>` : ''}
+    </div>
+    <div style="width:40%; text-align:center;">
+      <div style="font-weight:700; font-size:12px; margin-bottom:40px;">For ${tenant.name || 'लेखा जोखा Enterprise'}</div>
+      <div style="border-top:1px solid #1e293b; display:inline-block; padding-top:4px; font-size:11px;">Authorized Signatory</div>
+    </div>
+  </div>
 
   <div class="footer">
     This is a computer-generated quotation. | Powered by लेखा जोखा Enterprise ERP
@@ -761,7 +778,7 @@ export default function QuotationsPage() {
                       </div>
 
                       <div className="col-span-2 text-right font-mono font-black text-indigo-600">
-                        {formatCurrency(item.quantity * item.unitPrice * (1 + item.taxRate / 100))}
+                        {formatCurrency(item.quantity * item.unitPrice)}
                       </div>
 
                       <div className="col-span-1 text-center">
@@ -777,6 +794,19 @@ export default function QuotationsPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Terms & Conditions
+                </label>
+                <textarea
+                  value={terms}
+                  onChange={(e) => setTerms(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  rows={2}
+                  placeholder="Enter terms and conditions..."
+                />
               </div>
 
               <div className="flex items-center gap-3 pt-3">
@@ -1020,7 +1050,7 @@ export default function QuotationsPage() {
                       </div>
 
                       <div className="col-span-2 text-right font-mono font-black text-indigo-600">
-                        {formatCurrency(item.quantity * item.unitPrice * (1 + item.taxRate / 100))}
+                        {formatCurrency(item.quantity * item.unitPrice)}
                       </div>
 
                       <div className="col-span-1 text-center">
@@ -1041,19 +1071,19 @@ export default function QuotationsPage() {
               {/* Edit Totals Preview */}
               <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-3 space-y-1 text-xs">
                 <div className="flex justify-between text-slate-500">
-                  <span>Subtotal</span>
+                  <span>Subtotal (Excl. Tax)</span>
                   <span className="font-mono font-bold">
                     {formatCurrency(
-                      editItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+                      editItems.reduce((s, i) => s + (i.quantity * i.unitPrice) / (1 + i.taxRate / 100), 0)
                     )}
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-500">
-                  <span>GST</span>
+                  <span>GST (Included)</span>
                   <span className="font-mono font-bold">
                     {formatCurrency(
                       editItems.reduce(
-                        (s, i) => s + i.quantity * i.unitPrice * (i.taxRate / 100),
+                        (s, i) => s + ((i.quantity * i.unitPrice) - ((i.quantity * i.unitPrice) / (1 + i.taxRate / 100))),
                         0
                       )
                     )}
@@ -1065,14 +1095,26 @@ export default function QuotationsPage() {
                     {formatCurrency(
                       Math.round(
                         editItems.reduce(
-                          (s, i) =>
-                            s + i.quantity * i.unitPrice * (1 + i.taxRate / 100),
+                          (s, i) => s + (i.quantity * i.unitPrice),
                           0
                         )
                       )
                     )}
                   </span>
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  Terms & Conditions
+                </label>
+                <textarea
+                  value={editTerms}
+                  onChange={(e) => setEditTerms(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  rows={2}
+                  placeholder="Enter terms and conditions..."
+                />
               </div>
 
               <div className="flex items-center gap-3 pt-3">
