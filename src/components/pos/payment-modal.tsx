@@ -43,6 +43,7 @@ export const PaymentModal: React.FC = () => {
   const [creditAmount, setCreditAmount] = useState<number>(0);
   const [notes, setNotes] = useState<string>("");
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Submit confirmation dialog state
   const [isConfirmOpen, setIsConfirmOpen] = useState<boolean>(false);
@@ -90,20 +91,63 @@ export const PaymentModal: React.FC = () => {
   };
 
   // Final execution after user clicks "Yes" on confirmation dialog
-  const executeCheckout = () => {
-    const splits: PaymentSplit[] = [];
-    if (cashAmount > 0) splits.push({ mode: "CASH", amount: cashAmount });
-    if (upiAmount > 0) splits.push({ mode: "UPI", amount: upiAmount, refNumber: upiRef || "UPI-POS" });
-    if (bankAmount > 0) splits.push({ mode: "BANK_TRANSFER", amount: bankAmount, refNumber: bankRef || "NEFT" });
-    if (creditAmount > 0) splits.push({ mode: "CREDIT", amount: creditAmount });
+  const executeCheckout = async () => {
+    setIsSubmitting(true);
+    try {
+      const splits: PaymentSplit[] = [];
+      if (cashAmount > 0) splits.push({ mode: "CASH", amount: cashAmount });
+      if (upiAmount > 0) splits.push({ mode: "UPI", amount: upiAmount, refNumber: upiRef || "UPI-POS" });
+      if (bankAmount > 0) splits.push({ mode: "BANK_TRANSFER", amount: bankAmount, refNumber: bankRef || "NEFT" });
+      if (creditAmount > 0) splits.push({ mode: "CREDIT", amount: creditAmount });
 
-    // If no explicit split was entered, default to Cash
-    if (splits.length === 0) {
-      splits.push({ mode: "CASH", amount: grandTotal });
+      // If no explicit split was entered, default to Cash
+      if (splits.length === 0) {
+        splits.push({ mode: "CASH", amount: grandTotal });
+      }
+
+      const state = usePosStore.getState();
+      const payload = {
+        tenantId: state.tenant.id,
+        invoiceType: "TAX_INVOICE",
+        partyId: state.selectedParty?.id === "party-walkin-cash" ? null : state.selectedParty?.id,
+        godownId: state.activeGodownId,
+        placeOfSupply: state.placeOfSupply,
+        items: state.activeCartItems.map(item => ({
+          productId: item.productId,
+          batchId: item.selectedBatch?.id || null,
+          selectedSerials: item.selectedSerials,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          isTaxInclusive: item.isTaxInclusive,
+          discountPercent: item.discountPercent,
+          discountAmount: item.discountAmount,
+        })),
+        payments: splits,
+        billDiscount: state.billDiscount,
+        autoRoundOff: state.autoRoundOff,
+        notes: notes || null,
+      };
+
+      const res = await fetch("/api/v1/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save invoice to database.");
+      }
+
+      completeTransaction(splits, "TAX_INVOICE", notes);
+      setIsSuccess(true);
+      setIsConfirmOpen(false);
+    } catch (err: any) {
+      console.error("Checkout Submission Error:", err);
+      alert("Failed to submit bill: " + (err.message || "Unknown error"));
+    } finally {
+      setIsSubmitting(false);
     }
-
-    completeTransaction(splits, "TAX_INVOICE", notes);
-    setIsSuccess(true);
   };
 
   return (
@@ -372,22 +416,23 @@ export const PaymentModal: React.FC = () => {
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setIsConfirmOpen(false)}
-                className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl transition"
+                className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl transition disabled:opacity-50"
               >
                 No, Cancel
               </button>
 
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => {
-                  setIsConfirmOpen(false);
                   executeCheckout();
                 }}
-                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs rounded-xl shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-1.5 disabled:opacity-50"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Yes, Submit Bill</span>
+                <span>{isSubmitting ? "Submitting..." : "Yes, Submit Bill"}</span>
               </button>
             </div>
           </div>
