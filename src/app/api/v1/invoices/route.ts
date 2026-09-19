@@ -47,9 +47,10 @@ const CreateInvoiceSchema = z.object({
       "DEBIT_NOTE",
     ])
     .default("TAX_INVOICE"),
+  firmId: z.string().optional().nullable(),
   partyId: z.string().optional().nullable(),
   godownId: z.string().optional().nullable(),
-  placeOfSupply: z.string().length(2, "Place of supply must be a 2-digit state code").default("27"),
+  placeOfSupply: z.string().optional().default("27"),
   items: z.array(InvoiceItemSchema).min(1, "Invoice must have at least one item"),
   payments: z.array(PaymentSplitSchema).optional().default([]),
   billDiscount: z.number().nonnegative().optional().default(0),
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
     const {
       tenantId,
       invoiceType,
+      firmId,
       partyId,
       godownId,
       placeOfSupply,
@@ -335,14 +337,33 @@ export async function POST(req: NextRequest) {
         "0"
       )}`;
 
+      // Validate firm
+      let validFirmId: string | null = null;
+      if (firmId) {
+        const firmExists = await tx.firm.findFirst({ where: { id: firmId, tenantId } });
+        if (firmExists) validFirmId = firmExists.id;
+      }
+      if (!validFirmId) {
+        const primaryFirm = await tx.firm.findFirst({ where: { tenantId } });
+        if (primaryFirm) validFirmId = primaryFirm.id;
+      }
+
+      // Validate godown
+      let validGodownId: string | null = null;
+      if (godownId) {
+        const godownExists = await tx.godown.findUnique({ where: { id: godownId } });
+        if (godownExists) validGodownId = godownId;
+      }
+
       // 6. Create Invoice Record with Nested Invoice Items
       const createdInvoice = await tx.invoice.create({
         data: {
           tenantId,
           invoiceType,
           invoiceNo,
+          firmId: validFirmId,
           partyId: party?.id || null,
-          godownId: godownId || null,
+          godownId: validGodownId,
           placeOfSupply,
           isInterState,
           subtotal: round2(calculatedSubtotal),
@@ -367,6 +388,7 @@ export async function POST(req: NextRequest) {
         include: {
           items: { include: { product: true, batch: true } },
           party: true,
+          firm: true,
         },
       });
 
@@ -405,12 +427,17 @@ export async function POST(req: NextRequest) {
         invoiceNo: createdInvoice.invoiceNo,
       });
 
-      return {
-        success: true,
-        invoice: createdInvoice,
-        upiPayload,
-      };
-    });
+        return {
+          success: true,
+          invoice: createdInvoice,
+          upiPayload,
+        };
+      },
+      {
+        maxWait: 20000,
+        timeout: 30000,
+      }
+    );
 
     // ── Google Sheets Live Backup (fire-and-forget) ──
     fireAndForgetSheetSync(async () => {
@@ -598,6 +625,7 @@ export async function GET(req: NextRequest) {
       where: whereClause,
       include: {
         party: true,
+        firm: true,
         items: { include: { product: true, batch: true } },
         payments: true,
       },

@@ -261,10 +261,20 @@ export async function loginUserFromDb(email: string) {
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        tenant: true
-      }
+        tenant: {
+          include: {
+            firms: true,
+            settings: true,
+          },
+        },
+      },
     });
-    return { success: true, user, tenant: user?.tenant };
+    return {
+      success: true,
+      user,
+      tenant: user?.tenant,
+      firms: user?.tenant?.firms || [],
+    };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

@@ -181,7 +181,8 @@ interface PosState {
   completeTransaction: (
     splits: PaymentSplit[],
     invoiceType?: InvoiceType,
-    notes?: string
+    notes?: string,
+    officialInvoice?: Invoice
   ) => Invoice;
 
   // ERP CRUD Actions
@@ -248,6 +249,13 @@ interface PosState {
   masqueradeTenant: (tenantItem: TenantRegistryItem) => void;
   switchTenant: (tenantId: string) => void;
 
+  // Cross-device Cloud Synchronization
+  isSyncing: boolean;
+  lastSyncedAt: string | null;
+  syncError: string | null;
+  syncWithCloud: (targetTenantId?: string) => Promise<{ success: boolean; count?: number; error?: string }>;
+  mergeCloudData: (cloudData: any) => void;
+
   // Voice AI Parser
   processVoiceBilling: (transcript: string) => { matched: number; errors: string[] };
 }
@@ -272,6 +280,10 @@ export const usePosStore = create<PosState>()(
       superAdminUser: SUPER_ADMIN_USER as StaffUser,
       staffUsers: INITIAL_STAFF as StaffUser[],
       tenants: INITIAL_TENANTS_REGISTRY,
+
+      isSyncing: false,
+      lastSyncedAt: null,
+      syncError: null,
 
       activeGodownId: "godown-1",
       selectedParty: { ...INITIAL_PARTIES[3], stateCode: INITIAL_FIRMS[0]?.stateCode || "27" }, // Default Walk-in cash
@@ -593,7 +605,7 @@ export const usePosStore = create<PosState>()(
         }
       },
 
-      completeTransaction: (splits, invoiceType = "TAX_INVOICE", notes) => {
+      completeTransaction: (splits, invoiceType = "TAX_INVOICE", notes, officialInvoice) => {
         const {
           tenant,
           firms = [],
@@ -625,38 +637,48 @@ export const usePosStore = create<PosState>()(
         const fyEnd = fyStart + 1;
         const fyCode = `${String(fyStart).slice(-2)}${String(fyEnd).slice(-2)}`;
         const tenantInvoicesCount = invoices.filter((i) => (i.tenantId ? i.tenantId === tenant.id : true)).length;
-        const newInvoiceNumber = `${prefix}-${fyCode}-${String(tenantInvoicesCount + 1).padStart(4, "0")}`;
+        const newInvoiceNumber = officialInvoice?.invoiceNo || `${prefix}-${fyCode}-${String(tenantInvoicesCount + 1).padStart(4, "0")}`;
 
-        const completedInvoice: Invoice = {
-          id: `inv-${Date.now()}`,
-          tenantId: tenant.id,
-          firmId: activeFirm?.id,
-          firm: activeFirm,
-          invoiceType,
-          invoiceNo: newInvoiceNumber,
-          partyId: selectedParty?.id,
-          party: selectedParty || undefined,
-          godownId: get().activeGodownId,
-          placeOfSupply: posState,
-          isInterState,
-          subtotal: calc.subtotal,
-          discountTotal: calc.discountTotal,
-          taxableAmount: calc.taxableAmount,
-          cgst: calc.cgst,
-          sgst: calc.sgst,
-          igst: calc.igst,
-          cess: calc.cess,
-          roundOff: calc.roundOff,
-          grandTotal: calc.grandTotal,
-          paidAmount,
-          balanceAmount,
-          status: "COMPLETED",
-          paymentStatus: balanceAmount <= 0 ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID",
-          paymentSplits: splits,
-          items: [...activeCartItems],
-          notes,
-          createdAt: new Date().toISOString(),
-        };
+        const completedInvoice: Invoice = officialInvoice
+          ? {
+              ...officialInvoice,
+              tenantId: tenant.id,
+              firmId: activeFirm?.id || officialInvoice.firmId,
+              firm: activeFirm || officialInvoice.firm,
+              items: officialInvoice.items && officialInvoice.items.length > 0 ? officialInvoice.items : [...activeCartItems],
+              paymentSplits: splits,
+              notes: notes || officialInvoice.notes,
+            }
+          : {
+              id: `inv-${Date.now()}`,
+              tenantId: tenant.id,
+              firmId: activeFirm?.id,
+              firm: activeFirm,
+              invoiceType,
+              invoiceNo: newInvoiceNumber,
+              partyId: selectedParty?.id,
+              party: selectedParty || undefined,
+              godownId: get().activeGodownId,
+              placeOfSupply: posState,
+              isInterState,
+              subtotal: calc.subtotal,
+              discountTotal: calc.discountTotal,
+              taxableAmount: calc.taxableAmount,
+              cgst: calc.cgst,
+              sgst: calc.sgst,
+              igst: calc.igst,
+              cess: calc.cess,
+              roundOff: calc.roundOff,
+              grandTotal: calc.grandTotal,
+              paidAmount,
+              balanceAmount,
+              status: "COMPLETED",
+              paymentStatus: balanceAmount <= 0 ? "PAID" : paidAmount > 0 ? "PARTIAL" : "UNPAID",
+              paymentSplits: splits,
+              items: [...activeCartItems],
+              notes,
+              createdAt: new Date().toISOString(),
+            };
 
         // Update product stock quantities
         const updatedProducts = products.map((p) => {
@@ -682,7 +704,7 @@ export const usePosStore = create<PosState>()(
         });
 
         set({
-          invoices: [completedInvoice, ...invoices],
+          invoices: [completedInvoice, ...invoices.filter((i) => i.id !== completedInvoice.id && i.invoiceNo !== completedInvoice.invoiceNo)],
           products: updatedProducts,
           parties: updatedParties,
           lastCompletedInvoice: completedInvoice,
@@ -693,18 +715,35 @@ export const usePosStore = create<PosState>()(
           placeOfSupply: supplierState,
         });
 
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            get().syncWithCloud().catch(() => {});
+          }, 100);
+        }
+
         return completedInvoice;
       },
 
       addProduct: (product) => {
         const tenantId = product.tenantId || get().tenant.id;
-        set((state) => ({ products: [{ ...product, tenantId }, ...state.products] }));
+        const updatedProduct = { ...product, tenantId };
+        set((state) => ({ products: [updatedProduct, ...state.products] }));
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            get().syncWithCloud().catch(() => {});
+          }, 100);
+        }
       },
 
       updateProduct: (product) => {
         set((state) => ({
           products: state.products.map((p) => (p.id === product.id ? product : p)),
         }));
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            get().syncWithCloud().catch(() => {});
+          }, 100);
+        }
       },
 
       deleteProduct: (productId) => {
@@ -824,6 +863,12 @@ export const usePosStore = create<PosState>()(
           savePermanentVaultData({ categories: updated });
           return { categories: updated };
         });
+
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            get().syncWithCloud().catch(() => {});
+          }, 100);
+        }
 
         return newCat;
       },
@@ -1092,6 +1137,11 @@ export const usePosStore = create<PosState>()(
           savePermanentVaultData({ parties: updatedParties });
           return { parties: updatedParties };
         });
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            get().syncWithCloud().catch(() => {});
+          }, 100);
+        }
       },
 
       updateParty: (party) => {
@@ -1540,63 +1590,116 @@ export const usePosStore = create<PosState>()(
           } as unknown as StaffUser;
 
           const { tenants, firms } = get();
-          const userTenantId = matched.tenantId || tenant.id;
+          const userTenantId = matched.tenantId || res.tenant?.id || tenant.id;
           const tenantItem = tenants.find((t) => t.id === userTenantId || t.ownerEmail?.toLowerCase() === cleanEmail);
-          const matchingFirm = firms.find((f) => f.tenantId === userTenantId) || (tenantItem ? firms.find((f) => f.name === tenantItem.name) : undefined);
 
-          const updatedTenant = tenantItem
-          ? {
-              ...tenant,
-              id: tenantItem.id,
-              name: res.tenant?.name || tenantItem.name,
-              legalName: tenantItem.legalName || tenantItem.name,
-              gstin: tenantItem.gstin || "UNREGISTERED",
-              stateCode: tenantItem.stateCode,
-              stateName: tenantItem.stateName,
-              phone: tenantItem.ownerPhone || tenant.phone,
-              email: tenantItem.ownerEmail || tenant.email,
-              address: `Main Commercial Hub, ${tenantItem.stateName}`,
-              city: tenantItem.stateName,
-              thermalHeader: `★ ${tenantItem.name.toUpperCase()} ★\nGSTIN: ${tenantItem.gstin || "UNREGISTERED"}\nTax Invoice / Cash Receipt`,
-              plan: (res.tenant as any)?.plan || tenantItem.plan || tenant.plan,
-              subscriptionStatus: (res.tenant as any)?.subscriptionStatus || tenantItem.subscriptionStatus || tenant.subscriptionStatus,
-            }
-          : matchingFirm
-          ? {
-              ...tenant,
-              id: userTenantId,
-              name: res.tenant?.name || matchingFirm.name,
-              legalName: matchingFirm.legalName || matchingFirm.name,
-              gstin: matchingFirm.gstin || "UNREGISTERED",
-              stateCode: matchingFirm.stateCode,
-              stateName: matchingFirm.stateName,
-              phone: matchingFirm.phone || tenant.phone,
-              email: matchingFirm.email || tenant.email,
-              address: matchingFirm.address || tenant.address,
-              plan: (res.tenant as any)?.plan || tenant.plan,
-              subscriptionStatus: (res.tenant as any)?.subscriptionStatus || tenant.subscriptionStatus,
-            }
-          : {
-              ...tenant,
-              plan: (res.tenant as any)?.plan || tenant.plan,
-              subscriptionStatus: (res.tenant as any)?.subscriptionStatus || tenant.subscriptionStatus,
-            };
+          const dbTenant = res.tenant;
+          const dbFirms = ((res as any).firms || (res.tenant as any)?.firms || []) as unknown as Firm[];
+          const allFirms = dbFirms.length > 0 ? dbFirms : firms;
+          const matchingFirm = allFirms.find((f) => f.tenantId === userTenantId) || (tenantItem ? allFirms.find((f) => f.name === tenantItem.name) : undefined);
 
-        const nextActiveFirmId = matchingFirm?.id || (tenantItem ? `firm-${tenantItem.id}` : get().activeFirmId);
+          const updatedTenant: TenantInfo = dbTenant
+            ? {
+                ...tenant,
+                id: dbTenant.id,
+                name: dbTenant.name,
+                legalName: dbTenant.legalName || dbTenant.name,
+                gstin: dbTenant.gstin || "UNREGISTERED",
+                stateCode: dbTenant.stateCode || "27",
+                stateName: dbTenant.stateCode === "27" ? "Maharashtra" : "State",
+                phone: dbTenant.phone || tenantItem?.ownerPhone || tenant.phone,
+                email: dbTenant.email || cleanEmail,
+                address: dbTenant.address || (tenantItem ? `Main Commercial Hub, ${tenantItem.stateName}` : tenant.address),
+                city: dbTenant.city || tenantItem?.stateName || tenant.city,
+                pincode: dbTenant.pincode || tenant.pincode,
+                logoUrl: dbTenant.logoUrl || tenant.logoUrl,
+                upiVpa: dbTenant.upiVpa || tenant.upiVpa,
+                upiName: dbTenant.upiName || dbTenant.name,
+                thermalHeader: dbTenant.thermalHeader || `★ ${dbTenant.name.toUpperCase()} ★\nGSTIN: ${dbTenant.gstin || "UNREGISTERED"}\nTax Invoice / Cash Receipt`,
+                thermalFooter: dbTenant.thermalFooter || tenant.thermalFooter,
+                plan: (dbTenant.plan as any) || tenantItem?.plan || tenant.plan,
+                subscriptionStatus: (dbTenant.subscriptionStatus as any) || tenantItem?.subscriptionStatus || tenant.subscriptionStatus,
+              }
+            : tenantItem
+            ? {
+                ...tenant,
+                id: tenantItem.id,
+                name: tenantItem.name,
+                legalName: tenantItem.legalName || tenantItem.name,
+                gstin: tenantItem.gstin || "UNREGISTERED",
+                stateCode: tenantItem.stateCode,
+                stateName: tenantItem.stateName,
+                phone: tenantItem.ownerPhone || tenant.phone,
+                email: tenantItem.ownerEmail || tenant.email,
+                address: `Main Commercial Hub, ${tenantItem.stateName}`,
+                city: tenantItem.stateName,
+                thermalHeader: `★ ${tenantItem.name.toUpperCase()} ★\nGSTIN: ${tenantItem.gstin || "UNREGISTERED"}\nTax Invoice / Cash Receipt`,
+                plan: tenantItem.plan || tenant.plan,
+                subscriptionStatus: tenantItem.subscriptionStatus || tenant.subscriptionStatus,
+              }
+            : {
+                ...tenant,
+                id: userTenantId,
+                plan: (res.tenant as any)?.plan || tenant.plan,
+                subscriptionStatus: (res.tenant as any)?.subscriptionStatus || tenant.subscriptionStatus,
+              };
 
-        set((state) => ({
-          currentUser: updatedUser,
-          tenant: updatedTenant,
-          activeFirmId: nextActiveFirmId,
-          placeOfSupply: updatedTenant.stateCode || state.placeOfSupply,
-          staffUsers: state.staffUsers.map((u) => (u.id === updatedUser.id ? updatedUser : u)),
-        }));
+          const primaryFirm = dbFirms.find((f) => f.isPrimary) || matchingFirm || dbFirms[0];
+          const nextActiveFirmId = primaryFirm?.id || matchingFirm?.id || (tenantItem ? `firm-${tenantItem.id}` : get().activeFirmId);
 
-        if (typeof window !== "undefined") {
-          localStorage.setItem("vyaparflow_auth_session", JSON.stringify(updatedUser));
-        }
+          // Add or update tenant in registry
+          const registryItem: TenantRegistryItem = {
+            id: updatedTenant.id,
+            name: updatedTenant.name,
+            legalName: updatedTenant.legalName,
+            gstin: updatedTenant.gstin,
+            stateCode: updatedTenant.stateCode,
+            stateName: updatedTenant.stateName,
+            ownerName: matched.name,
+            ownerEmail: matched.email,
+            ownerPhone: matched.phone || updatedTenant.phone || "",
+            plan: (updatedTenant.plan as any) || "PRO",
+            subscriptionStatus: (updatedTenant.subscriptionStatus as any) || "ACTIVE",
+            isActive: true,
+            totalUsersCount: 1,
+            lastActiveAt: new Date().toISOString(),
+            createdAt: dbTenant?.createdAt ? new Date(dbTenant.createdAt).toISOString() : new Date().toISOString(),
+          };
 
-        return { success: true, user: updatedUser };
+          const updatedTenantsMap = new Map<string, TenantRegistryItem>();
+          (tenants || []).forEach((t) => updatedTenantsMap.set(t.id, t));
+          updatedTenantsMap.set(registryItem.id, registryItem);
+          const updatedTenants = Array.from(updatedTenantsMap.values());
+
+          // Merge DB firms into firms list
+          const mergedFirmsMap = new Map<string, Firm>();
+          (firms || []).forEach((f) => mergedFirmsMap.set(f.id, f));
+          dbFirms.forEach((f) => mergedFirmsMap.set(f.id, f));
+          const updatedFirms = Array.from(mergedFirmsMap.values());
+
+          set((state) => ({
+            currentUser: updatedUser,
+            tenant: updatedTenant,
+            tenants: updatedTenants,
+            firms: updatedFirms,
+            activeFirmId: nextActiveFirmId,
+            placeOfSupply: updatedTenant.stateCode || state.placeOfSupply,
+            staffUsers: state.staffUsers.map((u) => (u.id === updatedUser.id ? updatedUser : u)),
+          }));
+
+          if (typeof window !== "undefined") {
+            localStorage.setItem("vyaparflow_auth_session", JSON.stringify(updatedUser));
+            savePermanentVaultData({ tenants: updatedTenants, firms: updatedFirms });
+          }
+
+          // Pre-fetch all bills, invoices, products, and parties from cloud DB immediately before finishing login
+          try {
+            await get().syncWithCloud(updatedTenant.id);
+          } catch (syncErr) {
+            console.warn("Initial login sync notice:", syncErr);
+          }
+
+          return { success: true, user: updatedUser };
         } catch (error) {
           console.error("DB Login Error:", error);
           return { success: false, error: "Database connection failed. Try again later." };
@@ -1984,6 +2087,242 @@ export const usePosStore = create<PosState>()(
           },
         }));
       },
+
+      mergeCloudData: (cloudData) => {
+        if (!cloudData) return;
+        const currentTenantId = get().tenant?.id || get().currentUser?.tenantId;
+
+        set((state) => {
+          // 0. Update Tenant metadata if provided by cloud
+          let updatedTenant = state.tenant;
+          if (cloudData.tenant && cloudData.tenant.id) {
+            updatedTenant = {
+              ...state.tenant,
+              id: cloudData.tenant.id,
+              name: cloudData.tenant.name,
+              legalName: cloudData.tenant.legalName || cloudData.tenant.name,
+              gstin: cloudData.tenant.gstin || "UNREGISTERED",
+              stateCode: cloudData.tenant.stateCode || "27",
+              stateName: cloudData.tenant.stateCode === "27" ? "Maharashtra" : "State",
+              phone: cloudData.tenant.phone || state.tenant.phone,
+              email: cloudData.tenant.email || state.tenant.email,
+              address: cloudData.tenant.address || state.tenant.address,
+              city: cloudData.tenant.city || state.tenant.city,
+              pincode: cloudData.tenant.pincode || state.tenant.pincode,
+              upiVpa: cloudData.tenant.upiVpa || state.tenant.upiVpa,
+              upiName: cloudData.tenant.upiName || state.tenant.upiName,
+              thermalHeader: cloudData.tenant.thermalHeader || state.tenant.thermalHeader,
+              thermalFooter: cloudData.tenant.thermalFooter || state.tenant.thermalFooter,
+              plan: cloudData.tenant.plan || state.tenant.plan,
+              subscriptionStatus: cloudData.tenant.subscriptionStatus || state.tenant.subscriptionStatus,
+            };
+          }
+
+          // 1. Merge Invoices: Server invoices are authoritative for this tenant
+          let mergedInvoices = [...state.invoices];
+          if (Array.isArray(cloudData.invoices)) {
+            const invoiceMap = new Map<string, Invoice>();
+            // Add server invoices
+            cloudData.invoices.forEach((inv: Invoice) => {
+              const key = inv.invoiceNo || inv.id;
+              if (key) invoiceMap.set(key, inv);
+            });
+            // Preserve unique local unsynced invoices belonging to this tenant
+            state.invoices.forEach((inv) => {
+              if (inv.tenantId === currentTenantId) {
+                const key = inv.invoiceNo || inv.id;
+                if (key && !invoiceMap.has(key)) {
+                  invoiceMap.set(key, inv);
+                }
+              }
+            });
+            const isRealTenant = currentTenantId && currentTenantId !== "tenant-vyapar-01";
+            const otherTenantInvoices = isRealTenant
+              ? []
+              : state.invoices.filter((i) => i.tenantId && i.tenantId !== currentTenantId);
+            mergedInvoices = [...Array.from(invoiceMap.values()), ...otherTenantInvoices];
+          }
+
+          // 2. Merge Products
+          let mergedProducts = [...state.products];
+          if (Array.isArray(cloudData.products)) {
+            const prodMap = new Map<string, Product>();
+            cloudData.products.forEach((p: Product) => {
+              if (p.id) prodMap.set(p.id, p);
+            });
+            state.products.forEach((p) => {
+              if (p.tenantId === currentTenantId && !prodMap.has(p.id)) {
+                prodMap.set(p.id, p);
+              }
+            });
+            const isRealTenant = currentTenantId && currentTenantId !== "tenant-vyapar-01";
+            const otherTenantProducts = isRealTenant
+              ? []
+              : state.products.filter((p) => p.tenantId && p.tenantId !== currentTenantId);
+            mergedProducts = [...Array.from(prodMap.values()), ...otherTenantProducts];
+          }
+
+          // 3. Merge Parties (Customers & Vendors)
+          let mergedParties = [...state.parties];
+          if (Array.isArray(cloudData.parties)) {
+            const partyMap = new Map<string, Party>();
+            const walkin = state.parties.find((p) => p.id === "party-walkin-cash") || INITIAL_PARTIES[3];
+            if (walkin) partyMap.set(walkin.id, walkin);
+
+            cloudData.parties.forEach((pt: Party) => {
+              if (pt.id) partyMap.set(pt.id, pt);
+            });
+            state.parties.forEach((pt) => {
+              if (pt.tenantId === currentTenantId && !partyMap.has(pt.id)) {
+                partyMap.set(pt.id, pt);
+              }
+            });
+            const isRealTenant = currentTenantId && currentTenantId !== "tenant-vyapar-01";
+            const otherTenantParties = isRealTenant
+              ? (walkin ? [walkin] : [])
+              : state.parties.filter((p) => p.tenantId && p.tenantId !== currentTenantId);
+            mergedParties = Array.from(new Set([...Array.from(partyMap.values()), ...otherTenantParties]));
+          }
+
+          // 4. Merge Categories
+          let mergedCategories = [...state.categories];
+          if (Array.isArray(cloudData.categories) && cloudData.categories.length > 0) {
+            const catMap = new Map<string, Category>();
+            cloudData.categories.forEach((c: Category) => {
+              if (c.id || c.name) catMap.set(c.id || c.name, c);
+            });
+            state.categories.forEach((c) => {
+              const key = c.id || c.name;
+              if (key && !catMap.has(key)) catMap.set(key, c);
+            });
+            mergedCategories = Array.from(catMap.values());
+          }
+
+          // 5. Merge Firms and activate primary firm
+          let mergedFirms = [...state.firms];
+          let activeFirmId = state.activeFirmId;
+          if (Array.isArray(cloudData.firms) && cloudData.firms.length > 0) {
+            const firmMap = new Map<string, Firm>();
+            cloudData.firms.forEach((f: Firm) => {
+              if (f.id) firmMap.set(f.id, f);
+            });
+            state.firms.forEach((f) => {
+              if (f.id && !firmMap.has(f.id)) firmMap.set(f.id, f);
+            });
+            mergedFirms = Array.from(firmMap.values());
+
+            const tenantFirm = cloudData.firms.find((f: Firm) => f.isPrimary) || cloudData.firms[0];
+            if (tenantFirm) {
+              const currentActiveMatches = mergedFirms.some((f) => f.id === activeFirmId && f.tenantId === currentTenantId);
+              if (!currentActiveMatches) {
+                activeFirmId = tenantFirm.id;
+              }
+            }
+          }
+
+          // 6. Merge Expenses, Purchases, Quotations if provided
+          const mergedExpenses = Array.isArray(cloudData.expenses) && cloudData.expenses.length > 0 ? cloudData.expenses : state.expenses;
+          const mergedPurchases = Array.isArray(cloudData.purchases) && cloudData.purchases.length > 0 ? cloudData.purchases : state.purchaseInvoices;
+          const mergedQuotations = Array.isArray(cloudData.quotations) && cloudData.quotations.length > 0 ? cloudData.quotations : state.quotations;
+
+          return {
+            tenant: updatedTenant,
+            activeFirmId,
+            invoices: mergedInvoices,
+            products: mergedProducts,
+            parties: mergedParties,
+            categories: mergedCategories,
+            firms: mergedFirms,
+            expenses: mergedExpenses,
+            purchaseInvoices: mergedPurchases,
+            quotations: mergedQuotations,
+            lastSyncedAt: new Date().toISOString(),
+            isSyncing: false,
+            syncError: null,
+          };
+        });
+      },
+
+      syncWithCloud: async (targetTenantId?: string) => {
+        const activeTenantId = targetTenantId || get().tenant?.id || get().currentUser?.tenantId;
+        if (!activeTenantId) return { success: false, error: "No tenant active" };
+
+        const { invoices, products, parties, categories, firms } = get();
+        set({ isSyncing: true, syncError: null });
+
+        try {
+          // 1. Fetch live tenant data from cloud database
+          const res = await fetch(`/api/v1/sync?tenantId=${encodeURIComponent(activeTenantId)}`);
+          if (!res.ok) {
+            throw new Error(`Sync HTTP error ${res.status}`);
+          }
+          const json = await res.json();
+          if (!json.success || !json.data) {
+            throw new Error(json.error || "Failed to fetch cloud sync data");
+          }
+
+          // 2. Detect any unsynced records on this PC
+          const cloudInvoices: Invoice[] = json.data.invoices || [];
+          const cloudInvoiceNos = new Set(cloudInvoices.map((i) => i.invoiceNo));
+          const unsyncedLocalInvoices = invoices.filter(
+            (i) => i.tenantId === activeTenantId && !cloudInvoiceNos.has(i.invoiceNo)
+          );
+
+          const cloudProductSkus = new Set((json.data.products || []).map((p: Product) => p.sku));
+          const unsyncedProducts = products.filter(
+            (p) => p.tenantId === activeTenantId && !cloudProductSkus.has(p.sku)
+          );
+
+          const cloudPartyNames = new Set((json.data.parties || []).map((pt: Party) => pt.name.toLowerCase()));
+          const unsyncedParties = parties.filter(
+            (pt) => pt.tenantId === activeTenantId && pt.id !== "party-walkin-cash" && !cloudPartyNames.has(pt.name.toLowerCase())
+          );
+
+          const cloudCatNames = new Set((json.data.categories || []).map((c: Category) => c.name.toLowerCase()));
+          const unsyncedCategories = categories.filter(
+            (c) => c.tenantId === activeTenantId && !cloudCatNames.has(c.name.toLowerCase())
+          );
+
+          const hasUnsynced =
+            unsyncedLocalInvoices.length > 0 ||
+            unsyncedProducts.length > 0 ||
+            unsyncedParties.length > 0 ||
+            unsyncedCategories.length > 0;
+
+          // If there is any unsynced data, push to cloud database so other PCs can see them
+          if (hasUnsynced) {
+            await fetch("/api/v1/sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                tenantId: activeTenantId,
+                invoices: unsyncedLocalInvoices,
+                products: products.filter((p) => p.tenantId === activeTenantId),
+                parties: parties.filter((p) => p.tenantId === activeTenantId),
+                categories: categories.filter((c) => c.tenantId === activeTenantId),
+                firms: firms.filter((f) => f.tenantId === activeTenantId),
+              }),
+            }).catch((err) => console.warn("Background upload notice:", err));
+
+            // Refetch after uploading to get unified records
+            const refetchRes = await fetch(`/api/v1/sync?tenantId=${encodeURIComponent(activeTenantId)}`);
+            if (refetchRes.ok) {
+              const freshJson = await refetchRes.json();
+              if (freshJson.success && freshJson.data) {
+                get().mergeCloudData(freshJson.data);
+                return { success: true, count: freshJson.data.invoices?.length || 0 };
+              }
+            }
+          }
+
+          get().mergeCloudData(json.data);
+          return { success: true, count: cloudInvoices.length };
+        } catch (error: any) {
+          console.warn("Cloud synchronization notice:", error.message);
+          set({ isSyncing: false, syncError: error.message });
+          return { success: false, error: error.message };
+        }
+      },
     }),
     {
       name: "vyaparflow-pos-storage-v4",
@@ -2008,6 +2347,16 @@ export const usePosStore = create<PosState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+
+        // Auto-trigger cloud sync upon rehydration so all devices are immediately in sync
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            const tenantId = state.currentUser?.tenantId || state.tenant?.id;
+            if (tenantId) {
+              state.syncWithCloud?.(tenantId).catch((e) => console.warn("Rehydration sync notice:", e));
+            }
+          }, 300);
+        }
 
         // Auto-recover and merge missing tenants, parties, firms & staff from permanent backup vault
         if (typeof window !== "undefined") {
@@ -2060,12 +2409,17 @@ export const usePosStore = create<PosState>()(
         // If user is logged in, ensure state.tenant and state.activeFirmId match current user's tenant
         if (state.currentUser) {
           const userEmail = state.currentUser.email ? state.currentUser.email.toLowerCase() : "";
+          const userTenantId = state.currentUser.tenantId;
           const tenantItem = state.tenants?.find(
-            (t) => t.id === state.currentUser?.tenantId || (t.ownerEmail && t.ownerEmail.toLowerCase() === userEmail)
+            (t) => (userTenantId && t.id === userTenantId) || (t.ownerEmail && t.ownerEmail.toLowerCase() === userEmail)
           );
           const matchingFirm = state.firms?.find(
-            (f) => f.tenantId === state.currentUser?.tenantId || (tenantItem && f.name === tenantItem.name)
+            (f) => (userTenantId && f.tenantId === userTenantId) || (tenantItem && f.name === tenantItem.name)
           );
+
+          if (userTenantId && state.tenant.id !== userTenantId) {
+            state.tenant.id = userTenantId;
+          }
 
           if (tenantItem) {
             state.tenant = {
@@ -2080,9 +2434,9 @@ export const usePosStore = create<PosState>()(
               email: tenantItem.ownerEmail || state.tenant.email,
               address: `Main Commercial Hub, ${tenantItem.stateName}`,
             };
-            if (matchingFirm) {
-              state.activeFirmId = matchingFirm.id;
-            }
+          }
+          if (matchingFirm) {
+            state.activeFirmId = matchingFirm.id;
           }
         }
 

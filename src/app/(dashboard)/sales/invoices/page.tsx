@@ -34,7 +34,13 @@ type DatePreset = "ALL" | "TODAY" | "YESTERDAY" | "THIS_WEEK" | "THIS_MONTH" | "
 
 export default function InvoicesRegisterPage() {
   const { invoices: tenantInvoices, tenant, firms } = useTenantData();
-  const { activeFirmId, getActiveFirm } = usePosStore();
+  const { activeFirmId, getActiveFirm, syncWithCloud, isSyncing } = usePosStore();
+
+  React.useEffect(() => {
+    if (typeof syncWithCloud === "function") {
+      syncWithCloud().catch(() => {});
+    }
+  }, [tenant?.id, syncWithCloud]);
 
   const activeFirm =
     (typeof getActiveFirm === "function" ? getActiveFirm() : null) ||
@@ -295,14 +301,27 @@ export default function InvoicesRegisterPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleExportCSV}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition cursor-pointer shrink-0 self-start sm:self-auto"
-        >
-          <Download className="w-3.5 h-3.5" />
-          <span>Export CSV / Excel</span>
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => syncWithCloud?.()}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs rounded-xl border border-indigo-200 dark:border-indigo-800 active:scale-95 transition cursor-pointer"
+            title="Fetch latest invoices submitted across all PCs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-indigo-500" : ""}`} />
+            <span>{isSyncing ? "Syncing..." : "Sync Cloud"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Export CSV / Excel</span>
+          </button>
+        </div>
       </div>
 
       {/* Ultra-Compact Summary Ribbon Metrics */}

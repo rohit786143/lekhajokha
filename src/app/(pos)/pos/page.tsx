@@ -73,6 +73,7 @@ export default function PosPage() {
     lastCompletedInvoice,
     setLastCompletedInvoice,
     getCartCalculations,
+    syncWithCloud,
   } = usePosStore();
 
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -81,6 +82,17 @@ export default function PosPage() {
   const [printInvoiceFormat, setPrintInvoiceFormat] = useState<"THERMAL" | "A4">("THERMAL");
   const [discountPopoverItemId, setDiscountPopoverItemId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Cloud sync for POS terminals across all PCs
+  useEffect(() => {
+    if (typeof syncWithCloud === "function") {
+      syncWithCloud().catch(() => {});
+      const interval = setInterval(() => {
+        syncWithCloud().catch(() => {});
+      }, 20000);
+      return () => clearInterval(interval);
+    }
+  }, [tenant?.id, syncWithCloud]);
 
   // Tenant-Scoped Data
   const tenantProducts = products.filter((p) => !p.tenantId || p.tenantId === tenant.id);

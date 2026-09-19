@@ -108,6 +108,7 @@ export const PaymentModal: React.FC = () => {
       const state = usePosStore.getState();
       const payload = {
         tenantId: state.tenant.id,
+        firmId: state.activeFirmId,
         invoiceType: "TAX_INVOICE",
         partyId: state.selectedParty?.id === "party-walkin-cash" ? null : state.selectedParty?.id,
         godownId: state.activeGodownId,
@@ -139,7 +140,15 @@ export const PaymentModal: React.FC = () => {
         throw new Error(errData.error || "Failed to save invoice to database.");
       }
 
-      completeTransaction(splits, "TAX_INVOICE", notes);
+      const resData = await res.json().catch(() => ({}));
+      const officialInvoice = resData.invoice || undefined;
+
+      completeTransaction(splits, "TAX_INVOICE", notes, officialInvoice);
+      // Immediately sync with cloud database so all devices get the new invoice
+      const updatedStore = usePosStore.getState();
+      if (typeof updatedStore.syncWithCloud === "function") {
+        updatedStore.syncWithCloud().catch((e) => console.warn("Background sync notice:", e));
+      }
       setIsSuccess(true);
       setIsConfirmOpen(false);
     } catch (err: any) {

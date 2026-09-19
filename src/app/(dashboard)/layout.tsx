@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SidebarContent } from "@/components/layout/sidebar";
 import { usePosStore } from "@/lib/pos-store";
 import { updateUserCredentialsInDb, updateTenantOwnerCredentialsInDb } from "@/lib/actions";
-import { Menu, X, LogOut, ShieldCheck, User, Building2, Sliders } from "lucide-react";
+import { Menu, X, LogOut, ShieldCheck, User, Building2, Sliders, RefreshCw } from "lucide-react";
 
 export default function DashboardLayout({
   children,
@@ -15,11 +15,45 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { currentUser, staffUsers, logoutUser, tenant, getActiveFirm, firms, activeFirmId, updateCurrentUserCredentials } = usePosStore();
+  const {
+    currentUser,
+    staffUsers,
+    logoutUser,
+    tenant,
+    getActiveFirm,
+    firms,
+    activeFirmId,
+    updateCurrentUserCredentials,
+    isSyncing,
+    syncWithCloud,
+    lastSyncedAt,
+  } = usePosStore();
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("");
+
+  // Cross-device continuous cloud synchronization
+  useEffect(() => {
+    // 1. Sync immediately on dashboard load
+    syncWithCloud().catch(() => {});
+
+    // 2. Poll every 20 seconds so changes from other PCs show up automatically
+    const timer = setInterval(() => {
+      syncWithCloud().catch(() => {});
+    }, 20000);
+
+    // 3. Sync whenever user switches back to this browser tab
+    const handleFocus = () => {
+      syncWithCloud().catch(() => {});
+    };
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [tenant?.id, syncWithCloud]);
 
   const activeFirm =
     (typeof getActiveFirm === "function" ? getActiveFirm() : null) ||
@@ -108,6 +142,20 @@ export default function DashboardLayout({
 
           {/* RIGHT SIDE TOP CORNER: User Info & Logout Button */}
           <div className="flex items-center gap-3 ml-auto">
+            {/* Live Cloud Multi-Device Sync Indicator & Button */}
+            <button
+              onClick={() => syncWithCloud()}
+              disabled={isSyncing}
+              title="Click to sync data with cloud across all computers"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-indigo-50/70 hover:bg-indigo-100/70 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/50 border border-indigo-200/60 dark:border-indigo-800/60 text-xs font-bold text-indigo-700 dark:text-indigo-300 transition shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-indigo-600" : "text-indigo-500"}`} />
+              <span className="hidden sm:inline">
+                {isSyncing ? "Syncing..." : "Live Cloud"}
+              </span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Connected to Neon Live Cloud"></span>
+            </button>
+
             {/* User Info Badge */}
             <div className="flex items-center gap-2.5 px-3 py-1.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xs">
               <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
