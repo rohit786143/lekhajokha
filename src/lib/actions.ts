@@ -258,8 +258,14 @@ export async function createUserInDb(data: {
 
 export async function loginUserFromDb(email: string) {
   try {
-    const user = await prisma.user.findUnique({
-      where: { email },
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: cleanEmail,
+          mode: "insensitive",
+        },
+      },
       include: {
         tenant: {
           include: {
@@ -269,11 +275,20 @@ export async function loginUserFromDb(email: string) {
         },
       },
     });
+
+    if (!user) {
+      return { success: false, error: "No account found registered with this email." };
+    }
+
+    if (!user.tenantId || !user.tenant) {
+      return { success: false, error: "This user is not associated with an active business tenant." };
+    }
+
     return {
       success: true,
       user,
-      tenant: user?.tenant,
-      firms: user?.tenant?.firms || [],
+      tenant: user.tenant,
+      firms: user.tenant.firms || [],
     };
   } catch (error: any) {
     return { success: false, error: error.message };

@@ -608,6 +608,7 @@ export const usePosStore = create<PosState>()(
       completeTransaction: (splits, invoiceType = "TAX_INVOICE", notes, officialInvoice) => {
         const {
           tenant,
+          currentUser,
           firms = [],
           activeFirmId,
           selectedParty,
@@ -620,6 +621,7 @@ export const usePosStore = create<PosState>()(
           parties = [],
         } = get();
 
+        const activeTenantId = officialInvoice?.tenantId || currentUser?.tenantId || tenant?.id;
         const activeFirm = firms.find((f) => f.id === activeFirmId) || firms.find((f) => f.isPrimary) || firms[0];
         const supplierState = activeFirm?.stateCode || tenant?.stateCode || "27";
         const posState = placeOfSupply || supplierState;
@@ -636,13 +638,13 @@ export const usePosStore = create<PosState>()(
         const fyStart = currentMonth >= 4 ? currentYear : currentYear - 1;
         const fyEnd = fyStart + 1;
         const fyCode = `${String(fyStart).slice(-2)}${String(fyEnd).slice(-2)}`;
-        const tenantInvoicesCount = invoices.filter((i) => (i.tenantId ? i.tenantId === tenant.id : true)).length;
+        const tenantInvoicesCount = invoices.filter((i) => (i.tenantId ? i.tenantId === activeTenantId : true)).length;
         const newInvoiceNumber = officialInvoice?.invoiceNo || `${prefix}-${fyCode}-${String(tenantInvoicesCount + 1).padStart(4, "0")}`;
 
         const completedInvoice: Invoice = officialInvoice
           ? {
               ...officialInvoice,
-              tenantId: tenant.id,
+              tenantId: activeTenantId,
               firmId: activeFirm?.id || officialInvoice.firmId,
               firm: activeFirm || officialInvoice.firm,
               items: officialInvoice.items && officialInvoice.items.length > 0 ? officialInvoice.items : [...activeCartItems],
@@ -651,7 +653,7 @@ export const usePosStore = create<PosState>()(
             }
           : {
               id: `inv-${Date.now()}`,
-              tenantId: tenant.id,
+              tenantId: activeTenantId,
               firmId: activeFirm?.id,
               firm: activeFirm,
               invoiceType,
@@ -1623,7 +1625,7 @@ export const usePosStore = create<PosState>()(
             : tenantItem
             ? {
                 ...tenant,
-                id: tenantItem.id,
+                id: userTenantId || tenantItem.id,
                 name: tenantItem.name,
                 legalName: tenantItem.legalName || tenantItem.name,
                 gstin: tenantItem.gstin || "UNREGISTERED",
@@ -1640,8 +1642,8 @@ export const usePosStore = create<PosState>()(
             : {
                 ...tenant,
                 id: userTenantId,
-                plan: (res.tenant as any)?.plan || tenant.plan,
-                subscriptionStatus: (res.tenant as any)?.subscriptionStatus || tenant.subscriptionStatus,
+                plan: tenant.plan,
+                subscriptionStatus: tenant.subscriptionStatus,
               };
 
           const primaryFirm = dbFirms.find((f) => f.isPrimary) || matchingFirm || dbFirms[0];
@@ -1908,27 +1910,9 @@ export const usePosStore = create<PosState>()(
           });
 
           return { tenant: newTenant, owner: ownerUser };
-        } catch (error) {
+        } catch (error: any) {
           console.error("Onboard Error:", error);
-          // Return mock data fallback if DB fails so UI doesn't crash completely during testing
-          const mockTenant: TenantRegistryItem = {
-            id: `tenant-${Date.now()}`,
-            name: payload.businessName,
-            legalName: payload.legalName || payload.businessName,
-            gstin: payload.gstin || "",
-            stateCode: payload.stateCode || "27",
-            stateName: payload.stateName || "Maharashtra",
-            ownerName: payload.ownerName,
-            ownerEmail: payload.ownerEmail,
-            ownerPhone: payload.ownerPhone || "",
-            plan: payload.plan || "PRO",
-            subscriptionStatus: "ACTIVE",
-            isActive: true,
-            totalUsersCount: 1,
-            lastActiveAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-          };
-          return { tenant: mockTenant, owner: get().currentUser! };
+          throw new Error(error?.message || "Failed to onboard business tenant in database");
         }
       },
 
@@ -2406,25 +2390,48 @@ export const usePosStore = create<PosState>()(
           }
         }
 
-        // If user is logged in, ensure state.tenant and state.activeFirmId match current user's tenant
-        if (state.currentUser) {
-          const userEmail = state.currentUser.email ? state.currentUser.email.toLowerCase() : "";
+        // Check for saved session in localStorage to restore authenticated user
+        if (typeof window !== "undefined") {
+          try {
+            const savedSession = localStorage.getItem("vyaparflow_auth_session");
+            if (savedSession) {
+              const parsedUser = JSON.parse(savedSession);
+              if (parsedUser && parsedUser.id && parsedUser.tenantId) {
+                state.currentUser = parsedUser;
+                state.tenant.id = parsedUser.tenantId;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to restore saved auth session:", e);
+          }
+        }
+
+        // If user is logged in, ensure state.tenant and state.activeFirmId match current user's real DB tenant
+        if (state.currentUser && state.currentUser.tenantId) {
           const userTenantId = state.currentUser.tenantId;
+          const userEmail = state.currentUser.email ? state.currentUser.email.toLowerCase() : "";
+
+          // Purge any stale mock tenant items that might have been saved in local vault
+          if (state.tenants && Array.isArray(state.tenants)) {
+            state.tenants = state.tenants.filter(
+              (t) => !(t.ownerEmail && t.ownerEmail.toLowerCase() === userEmail && t.id.startsWith("tenant-17"))
+            );
+          }
+
           const tenantItem = state.tenants?.find(
-            (t) => (userTenantId && t.id === userTenantId) || (t.ownerEmail && t.ownerEmail.toLowerCase() === userEmail)
+            (t) => t.id === userTenantId || (t.ownerEmail && t.ownerEmail.toLowerCase() === userEmail)
           );
           const matchingFirm = state.firms?.find(
-            (f) => (userTenantId && f.tenantId === userTenantId) || (tenantItem && f.name === tenantItem.name)
+            (f) => f.tenantId === userTenantId || (tenantItem && f.name === tenantItem.name)
           );
 
-          if (userTenantId && state.tenant.id !== userTenantId) {
-            state.tenant.id = userTenantId;
-          }
+          // STRICT: state.tenant.id MUST be userTenantId from authenticated user
+          state.tenant.id = userTenantId;
 
           if (tenantItem) {
             state.tenant = {
               ...state.tenant,
-              id: tenantItem.id,
+              id: userTenantId,
               name: tenantItem.name,
               legalName: tenantItem.legalName || tenantItem.name,
               gstin: tenantItem.gstin || "UNREGISTERED",

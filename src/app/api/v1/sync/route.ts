@@ -339,17 +339,15 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Ensure Tenant exists in DB
-    let tenantRecord = await prisma.tenant.findUnique({ where: { id: tenantId } });
+    const tenantRecord = await prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!tenantRecord) {
-      tenantRecord = await prisma.tenant.create({
-        data: {
-          id: tenantId,
-          name: body.tenantName || "VyaparFlow Enterprise",
-          slug: `tenant-${tenantId.slice(0, 8)}`,
-          gstin: body.gstin || "UNREGISTERED",
-          stateCode: body.stateCode || "27",
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid tenantId: "${tenantId}". Tenant does not exist in the database. Sync rejected.`,
         },
-      });
+        { status: 400 }
+      );
     }
 
     let syncedInvoicesCount = 0;

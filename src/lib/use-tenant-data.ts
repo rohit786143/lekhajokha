@@ -24,7 +24,7 @@ export function useTenantData() {
     currentUser,
   } = usePosStore();
 
-  const tenantId = tenant?.id || "tenant-vyapar-01";
+  const tenantId = currentUser?.tenantId || tenant?.id || "tenant-vyapar-01";
   const isDefaultTenant = tenantId === "tenant-vyapar-01";
   const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
 
@@ -85,7 +85,7 @@ export function useTenantData() {
 
   return {
     tenantId,
-    tenant,
+    tenant: { ...tenant, id: tenantId },
     firms: tenantFirms,
     activeFirmId,
     godowns,

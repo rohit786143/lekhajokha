@@ -42,8 +42,8 @@ interface PurchaseRow {
 
 export default function NewPurchasePage() {
   const router = useRouter();
-  const { tenant, addPurchaseInvoice, addParty } = usePosStore();
-  const { parties, products } = useTenantData();
+  const { addPurchaseInvoice, addParty } = usePosStore();
+  const { tenantId, tenant, parties, products } = useTenantData();
 
   const vendors = parties.filter((p) => p.type === "VENDOR" || p.type === "BOTH");
 
@@ -297,7 +297,7 @@ export default function NewPurchasePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tenantId: tenant.id,
+          tenantId: tenantId || tenant.id,
           vendorId,
           billNo,
           billDate,

@@ -15,6 +15,11 @@ import {
 
 const InvoiceItemSchema = z.object({
   productId: z.string().min(1, "Product ID is required"),
+  name: z.string().optional(),
+  sku: z.string().optional(),
+  unit: z.string().optional(),
+  hsn: z.string().optional(),
+  taxRate: z.number().optional(),
   batchId: z.string().optional().nullable(),
   selectedSerials: z.array(z.string()).optional().default([]),
   quantity: z.number().positive("Quantity must be greater than zero"),
@@ -90,36 +95,24 @@ export async function POST(req: NextRequest) {
       terms,
     } = validatedData;
 
+    // 1. Strictly validate that tenantId exists in Neon PostgreSQL
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      include: { settings: true },
+    });
+
+    if (!tenant) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Invalid tenantId: "${tenantId}". No tenant exists in the database with this ID. Invoices cannot be created without a valid registered tenant.`,
+        },
+        { status: 400 }
+      );
+    }
+
     // Execute everything inside an isolated ACID transaction
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Fetch Tenant and verify existence & isolation
-      let tenant = await tx.tenant.findUnique({
-        where: { id: tenantId },
-        include: { settings: true },
-      });
-
-      // If tenant doesn't exist yet in database, create default tenant record for seamless bootstrap
-      if (!tenant) {
-        tenant = await tx.tenant.create({
-          data: {
-            id: tenantId,
-            name: "VyaparFlow Enterprise",
-            slug: `tenant-${Date.now()}`,
-            gstin: "27AABCU9603R1ZM",
-            stateCode: "27",
-            upiVpa: "vyaparflow@icici",
-            upiName: "VyaparFlow Enterprise",
-            settings: {
-              create: {
-                defaultPrintFormat: "THERMAL_80MM",
-                autoRoundOff: true,
-              },
-            },
-          },
-          include: { settings: true },
-        });
-      }
-
       const supplierState = tenant.stateCode || "27";
       const isInterState = isInterStateTransaction(supplierState, placeOfSupply);
 
@@ -144,20 +137,26 @@ export async function POST(req: NextRequest) {
       for (const itemInput of items) {
         // Fetch product
         let product = await tx.product.findFirst({
-          where: { id: itemInput.productId, tenantId },
+          where: {
+            tenantId,
+            OR: [
+              { id: itemInput.productId },
+              ...(itemInput.sku ? [{ sku: itemInput.sku }] : []),
+            ],
+          },
         });
 
-        // Bootstrap mock product in DB if not found (for smooth demonstration)
+        // Bootstrap product in DB if not found
         if (!product) {
+          const generatedSku = itemInput.sku || `SKU-${itemInput.productId.slice(-4)}-${Date.now().toString().slice(-4)}`;
           product = await tx.product.create({
             data: {
-              id: itemInput.productId,
               tenantId,
-              name: `Product ${itemInput.productId}`,
-              sku: `SKU-${itemInput.productId.slice(-4)}`,
-              unit: "PCS",
-              hsn: "9999",
-              taxRate: 18.0,
+              name: itemInput.name || `Product ${itemInput.productId}`,
+              sku: generatedSku,
+              unit: itemInput.unit || "PCS",
+              hsn: itemInput.hsn || "9999",
+              taxRate: itemInput.taxRate ?? 18.0,
               salePrice: itemInput.unitPrice,
               currentStock: 100,
             },
@@ -496,7 +495,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
-    console.error("ACID Billing Transaction Notice:", error.message || error);
+    console.error("Invoice Creation Error:", error);
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -509,96 +508,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resilient offline fallback computation if PostgreSQL is offline or local dev without active DB
-    if (validatedData) {
-      try {
-        const tenantId = validatedData.tenantId || "tenant-vyapar-01";
-        const placeOfSupply = validatedData.placeOfSupply || "27";
-        const isInterState = isInterStateTransaction("27", placeOfSupply);
-        const items = validatedData.items || [];
-        const payments = validatedData.payments || [];
-
-        const calcLines = items.map((it: any, idx: number) => {
-          const itemMock = {
-            id: `line-${Date.now()}-${idx}`,
-            productId: it.productId,
-            product: {
-              id: it.productId,
-              name: `Product ${it.productId}`,
-              sku: `SKU-${it.productId.slice(-4)}`,
-              unit: "PCS",
-              hsn: "9999",
-              taxRate: 18.0,
-              salePrice: it.unitPrice || 100,
-              mrp: it.unitPrice || 100,
-            },
-            quantity: it.quantity || 1,
-            unit: "PCS",
-            unitPrice: it.unitPrice || 100,
-            mrp: it.unitPrice || 100,
-            isTaxInclusive: it.isTaxInclusive || false,
-            discountPercent: it.discountPercent || 0,
-            discountAmount: it.discountAmount || 0,
-            taxRate: 18.0,
-            cessRate: 0,
-            hsn: "9999",
-          };
-          return calculateLineItem(itemMock as any, isInterState);
-        });
-
-        const totalSub = calcLines.reduce((s: number, i: any) => s + i.unitPrice * i.quantity, 0);
-        const totalTaxable = calcLines.reduce((s: number, i: any) => s + i.taxableAmount, 0);
-        const totalCgst = calcLines.reduce((s: number, i: any) => s + i.cgst, 0);
-        const totalSgst = calcLines.reduce((s: number, i: any) => s + i.sgst, 0);
-        const totalIgst = calcLines.reduce((s: number, i: any) => s + i.igst, 0);
-        const grandTotal = Math.round(totalTaxable + totalCgst + totalSgst + totalIgst);
-        const totalPaid = payments.reduce((s: number, p: any) => s + (p.amount || 0), 0);
-        const balanceAmount = Math.max(0, grandTotal - totalPaid);
-
-        const invoiceNo = `INV-2627-${Math.floor(1000 + Math.random() * 9000)}`;
-        const upiPayload = generateUpiUri({
-          vpa: "vyaparflow@icici",
-          payeeName: "VyaparFlow Enterprise",
-          amount: balanceAmount > 0 ? balanceAmount : grandTotal,
-          invoiceNo,
-        });
-
-        return NextResponse.json(
-          {
-            success: true,
-            offlineSynced: true,
-            invoice: {
-              id: `inv-${Date.now()}`,
-              tenantId,
-              invoiceType: validatedData.invoiceType || "TAX_INVOICE",
-              invoiceNo,
-              placeOfSupply,
-              isInterState,
-              subtotal: totalSub,
-              taxableAmount: totalTaxable,
-              cgst: totalCgst,
-              sgst: totalSgst,
-              igst: totalIgst,
-              grandTotal,
-              paidAmount: totalPaid > 0 ? totalPaid : grandTotal,
-              balanceAmount,
-              paymentStatus: balanceAmount <= 0 ? "PAID" : "PARTIAL",
-              items: calcLines,
-              createdAt: new Date().toISOString(),
-            },
-            upiPayload,
-          },
-          { status: 201 }
-        );
-      } catch (fallbackError) {
-        // Fall through to error response
-      }
-    }
-
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Internal Server Error during invoice creation",
+        error: error.message || "Failed to create invoice in database",
       },
       { status: 400 }
     );
@@ -612,7 +525,15 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const tenantId = searchParams.get("tenantId") || "tenant-vyapar-01";
+    const tenantId = searchParams.get("tenantId");
+
+    if (!tenantId) {
+      return NextResponse.json(
+        { success: false, error: "tenantId query parameter is required" },
+        { status: 400 }
+      );
+    }
+
     const partyId = searchParams.get("partyId");
     const status = searchParams.get("status");
     const limit = parseInt(searchParams.get("limit") || "50", 10);
@@ -639,12 +560,13 @@ export async function GET(req: NextRequest) {
       invoices,
     });
   } catch (error: any) {
-    console.error("Fetch Invoices Notice:", error.message || error);
-    return NextResponse.json({
-      success: true,
-      offlineSynced: true,
-      count: INITIAL_INVOICES.length,
-      invoices: INITIAL_INVOICES,
-    });
+    console.error("Fetch Invoices Error:", error.message || error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error.message || "Failed to fetch invoices from database",
+      },
+      { status: 500 }
+    );
   }
 }

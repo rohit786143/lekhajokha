@@ -106,8 +106,13 @@ export const PaymentModal: React.FC = () => {
       }
 
       const state = usePosStore.getState();
+      const authenticatedTenantId = state.currentUser?.tenantId || state.tenant?.id;
+      if (!authenticatedTenantId) {
+        throw new Error("Missing active authenticated tenant. Please log in again.");
+      }
+
       const payload = {
-        tenantId: state.tenant.id,
+        tenantId: authenticatedTenantId,
         firmId: state.activeFirmId,
         invoiceType: "TAX_INVOICE",
         partyId: state.selectedParty?.id === "party-walkin-cash" ? null : state.selectedParty?.id,
@@ -115,6 +120,11 @@ export const PaymentModal: React.FC = () => {
         placeOfSupply: state.placeOfSupply,
         items: state.activeCartItems.map(item => ({
           productId: item.productId,
+          name: item.product?.name,
+          sku: item.product?.sku,
+          unit: item.product?.unit || "PCS",
+          hsn: item.product?.hsn || "9999",
+          taxRate: item.product?.taxRate ?? 18.0,
           batchId: item.selectedBatch?.id || null,
           selectedSerials: item.selectedSerials,
           quantity: item.quantity,
