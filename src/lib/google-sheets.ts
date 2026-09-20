@@ -116,6 +116,13 @@ export async function verifySheetAccess(
       (tab) => !tabNames.some((t) => t.toLowerCase() === tab.toLowerCase())
     );
 
+    // If required tabs exist, ensure column headers are initialized on Row 1
+    for (const tab of requiredTabs) {
+      if (tabNames.some((t) => t.toLowerCase() === tab.toLowerCase())) {
+        await ensureTabHeaders(sheets, sheetId, tab);
+      }
+    }
+
     if (missingTabs.length > 0) {
       return {
         ok: true,
@@ -156,10 +163,203 @@ export async function verifySheetAccess(
   }
 }
 
+// ─── Column Headers Configuration & Automatic Initialization ───────────
+
+// In-memory cache of verified headers per sheet tab to avoid redundant API reads
+const _verifiedTabs = new Set<string>();
+
+export const SHEET_TAB_HEADERS: Record<string, string[]> = {
+  Sales_Log: [
+    "Date & Time",
+    "Invoice No",
+    "Customer Name",
+    "Item Name",
+    "SKU / Code",
+    "Quantity",
+    "Unit Price (₹)",
+    "Tax (₹)",
+    "Total (₹)",
+    "Payment Status",
+  ],
+  Purchases_Log: [
+    "Date & Time",
+    "Bill No",
+    "Vendor Name",
+    "Item Name",
+    "SKU / Code",
+    "Quantity",
+    "Purchase Price (₹)",
+    "Tax (₹)",
+    "Total (₹)",
+    "Payment Mode",
+  ],
+  Inventory_Live: [
+    "Last Updated",
+    "Item Name",
+    "SKU / Code",
+    "Current Stock",
+    "Unit",
+    "Purchase Price (₹)",
+    "Sale Price (₹)",
+    "MRP (₹)",
+    "HSN Code",
+    "GST Rate (%)",
+  ],
+};
+
+export function invalidateSheetHeaderCache(sheetId?: string): void {
+  if (!sheetId) {
+    _verifiedTabs.clear();
+  } else {
+    for (const key of Array.from(_verifiedTabs)) {
+      if (key.startsWith(`${sheetId}:`)) {
+        _verifiedTabs.delete(key);
+      }
+    }
+  }
+}
+
+/**
+ * Checks whether a row looks like a header row rather than transactional data.
+ */
+export function isLikelyHeaderRow(row: any[]): boolean {
+  if (!row || row.length === 0) return false;
+  const firstCell = String(row[0] || "").trim().toLowerCase();
+  if (!firstCell) return false;
+
+  // If first cell contains formatted date/time (e.g. "20/09/2026, 3:15:20 pm"), it's data
+  const isDateValue =
+    /\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}/.test(firstCell) ||
+    /^\d{1,2}:\d{2}/.test(firstCell);
+  if (isDateValue) return false;
+
+  // Check for common header keywords
+  const sample = row
+    .slice(0, 4)
+    .map((c) => String(c || "").trim().toLowerCase())
+    .join(" ");
+
+  return (
+    sample.includes("date") ||
+    sample.includes("time") ||
+    sample.includes("timestamp") ||
+    sample.includes("updated") ||
+    sample.includes("invoice") ||
+    sample.includes("bill") ||
+    sample.includes("item") ||
+    sample.includes("product") ||
+    sample.includes("sku") ||
+    sample.includes("stock") ||
+    sample.includes("vendor") ||
+    sample.includes("customer")
+  );
+}
+
+/**
+ * Ensures that Row 1 of the given tab contains proper column headers.
+ * If Row 1 is empty or missing headers, column headers are automatically written.
+ * If Row 1 contains actual data without headers, a new row is inserted at the top and headers are written.
+ */
+export async function ensureTabHeaders(
+  sheets: sheets_v4.Sheets,
+  sheetId: string,
+  tabName: string
+): Promise<boolean> {
+  const headers = SHEET_TAB_HEADERS[tabName];
+  if (!headers || headers.length === 0) return false;
+
+  const cacheKey = `${sheetId}:${tabName}`;
+  if (_verifiedTabs.has(cacheKey)) return true;
+
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: sheetId,
+      range: `${tabName}!A1:J1`,
+    });
+
+    const firstRow = res.data.values?.[0];
+    const hasExistingContent =
+      firstRow &&
+      firstRow.some(
+        (cell) =>
+          cell !== undefined &&
+          cell !== null &&
+          String(cell).trim().length > 0
+      );
+
+    if (hasExistingContent) {
+      if (isLikelyHeaderRow(firstRow)) {
+        // Headers already present on Row 1
+        _verifiedTabs.add(cacheKey);
+        return true;
+      }
+
+      // Row 1 contains actual transaction data without headers.
+      // Fetch sheet metadata to find tab gid so we can insert a row at index 0
+      try {
+        const sheetMeta = await sheets.spreadsheets.get({
+          spreadsheetId: sheetId,
+          fields: "sheets.properties(sheetId,title)",
+        });
+        const targetSheet = sheetMeta.data.sheets?.find(
+          (s) => s.properties?.title?.toLowerCase() === tabName.toLowerCase()
+        );
+        const tabGid = targetSheet?.properties?.sheetId;
+
+        if (tabGid !== undefined && tabGid !== null) {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: sheetId,
+            requestBody: {
+              requests: [
+                {
+                  insertDimension: {
+                    range: {
+                      sheetId: tabGid,
+                      dimension: "ROWS",
+                      startIndex: 0,
+                      endIndex: 1,
+                    },
+                    inheritFromBefore: false,
+                  },
+                },
+              ],
+            },
+          });
+        }
+      } catch (insertErr: any) {
+        console.warn(
+          `[GoogleSheets] Could not insert header row dimension for ${tabName}:`,
+          insertErr?.message
+        );
+      }
+    }
+
+    // Write header row values to Row 1 (A1:J1)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: sheetId,
+      range: `${tabName}!A1`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [headers],
+      },
+    });
+
+    _verifiedTabs.add(cacheKey);
+    return true;
+  } catch (err: any) {
+    console.warn(
+      `[GoogleSheets] Could not ensure headers for tab ${tabName} in sheet ${sheetId}:`,
+      err?.message
+    );
+    return false;
+  }
+}
+
 // ─── Append Row to Sales_Log / Purchases_Log ───────────────────────────
 
 /**
  * Appends a single row of data to a named tab in the tenant's sheet.
+ * Automatically ensures Row 1 contains column headers before appending.
  * @param sheetId - The tenant's Google Sheet ID
  * @param tabName - "Sales_Log" or "Purchases_Log"
  * @param rowData - Array of cell values in column order
@@ -171,6 +371,9 @@ export async function appendToTenantSheet(
 ): Promise<boolean> {
   try {
     const sheets = getSheetsClient();
+
+    // Ensure proper column headers exist in Row 1 before appending data
+    await ensureTabHeaders(sheets, sheetId, tabName);
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
@@ -208,10 +411,11 @@ interface InventoryUpdateItem {
 
 /**
  * Updates the Inventory_Live tab for each product:
+ *   - Ensures Row 1 headers exist
  *   - If SKU found → overwrite that row with fresh stock/rate data
  *   - If SKU not found → append a new row
  * 
- * Column layout: Timestamp | Product Name | SKU | Current Stock | Unit | Purchase Rate | Sale Price | MRP | HSN | GST%
+ * Column layout: Last Updated | Item Name | SKU / Code | Current Stock | Unit | Purchase Price | Sale Price | MRP | HSN Code | GST Rate (%)
  */
 export async function updateTenantLiveStock(
   sheetId: string,
@@ -220,6 +424,9 @@ export async function updateTenantLiveStock(
   try {
     const sheets = getSheetsClient();
     const tabName = "Inventory_Live";
+
+    // Ensure headers exist on Row 1 before updating stock
+    await ensureTabHeaders(sheets, sheetId, tabName);
 
     // Read existing data to find SKU matches
     const existing = await sheets.spreadsheets.values.get({
@@ -232,9 +439,13 @@ export async function updateTenantLiveStock(
       timeZone: "Asia/Kolkata",
     });
 
+    // If first row is a header row, start indexing products from row 1 (0-based)
+    const isFirstRowHeader = rows.length > 0 && isLikelyHeaderRow(rows[0]);
+    const startIndex = isFirstRowHeader ? 1 : 0;
+
     // Build a SKU → row index map (column C = index 2 for SKU)
     const skuRowMap: Record<string, number> = {};
-    for (let i = 0; i < rows.length; i++) {
+    for (let i = startIndex; i < rows.length; i++) {
       const sku = rows[i]?.[2]?.toString().trim().toUpperCase();
       if (sku) skuRowMap[sku] = i;
     }

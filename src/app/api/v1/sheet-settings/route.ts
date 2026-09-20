@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { extractSheetId, verifySheetAccess } from "@/lib/google-sheets";
+import {
+  extractSheetId,
+  verifySheetAccess,
+  invalidateSheetHeaderCache,
+} from "@/lib/google-sheets";
 
 const SheetSettingsSchema = z.object({
   tenantId: z.string().min(1, "Tenant ID is required"),
@@ -62,6 +66,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Invalidate cached headers state for fresh validation
+    invalidateSheetHeaderCache(sheetId);
 
     // 2. Upsert TenantSetting with googleSheetId so the link is preserved
     try {
@@ -130,6 +137,8 @@ export async function DELETE(req: NextRequest) {
     } catch {
       // Silently handle if DB is unavailable
     }
+
+    invalidateSheetHeaderCache();
 
     return NextResponse.json({
       success: true,

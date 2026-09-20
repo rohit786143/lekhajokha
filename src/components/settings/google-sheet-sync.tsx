@@ -273,6 +273,9 @@ export function GoogleSheetSync() {
                 <code className="px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 rounded font-mono text-[10px] font-bold">
                   Purchases_Log
                 </code>
+                <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                  ✓ Column headers (Date, Item Name, Quantity, Price, Total, etc.) will be automatically set up on Row 1.
+                </span>
               </li>
               <li>
                 Click <strong>Share</strong> → Add the bot email below as <strong>Editor</strong>
