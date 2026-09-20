@@ -24,13 +24,27 @@ interface SheetStatus {
   sheetTitle?: string;
 }
 
+const PERMANENT_SERVICE_EMAIL =
+  "lekhajokha-bot@lekhajokha-509206.iam.gserviceaccount.com";
+
+function getCleanInitialEmail(): string {
+  const envEmail = process.env.NEXT_PUBLIC_GOOGLE_SERVICE_EMAIL;
+  if (
+    envEmail &&
+    !envEmail.includes("your-gcp-project") &&
+    !envEmail.includes("example.com") &&
+    !envEmail.includes("lekha-jokha-sync")
+  ) {
+    return envEmail.trim();
+  }
+  return PERMANENT_SERVICE_EMAIL;
+}
+
 export function GoogleSheetSync() {
   const { tenant } = usePosStore();
   const tenantId = tenant?.id || "tenant-vyapar-01";
 
-  const serviceEmail =
-    process.env.NEXT_PUBLIC_GOOGLE_SERVICE_EMAIL ||
-    "lekhajokha-bot@lekhajokha-509206.iam.gserviceaccount.com";
+  const [serviceEmail, setServiceEmail] = useState<string>(getCleanInitialEmail);
 
   const [sheetUrl, setSheetUrl] = useState("");
   const [status, setStatus] = useState<SheetStatus>({
@@ -59,6 +73,14 @@ export function GoogleSheetSync() {
           isConnected: data.isConnected,
           sheetTitle: data.sheetTitle,
         });
+        if (
+          data.serviceEmail &&
+          !data.serviceEmail.includes("your-gcp-project") &&
+          !data.serviceEmail.includes("example.com") &&
+          !data.serviceEmail.includes("lekha-jokha-sync")
+        ) {
+          setServiceEmail(data.serviceEmail.trim());
+        }
       }
     } catch {
       // Silently fail — settings page should still render
@@ -288,20 +310,9 @@ export function GoogleSheetSync() {
         {/* Service Account Email — Copyable */}
         <div className="space-y-1.5">
           <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-            <Shield className="w-3 h-3" />
-            Service Account Bot Email (share your sheet with this)
+            <Shield className="w-3 h-3 text-indigo-500" />
+            Service Account Bot Email (share your sheet with this as Editor)
           </label>
-          {serviceEmail.includes("your-gcp-project") && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
-              <p className="font-bold flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                Setup Required: Google Service Account Not Configured
-              </p>
-              <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                The email below is a placeholder template. To enable live auto-sync, create a Service Account in Google Cloud Console, enable Google Sheets API, and set <code className="px-1 py-0.5 bg-amber-100 dark:bg-amber-900 rounded font-mono font-bold">GOOGLE_SERVICE_ACCOUNT_EMAIL</code> and <code className="px-1 py-0.5 bg-amber-100 dark:bg-amber-900 rounded font-mono font-bold">GOOGLE_PRIVATE_KEY</code> in your Vercel Environment Variables.
-              </p>
-            </div>
-          )}
           <div className="flex items-center gap-2">
             <div className="flex-1 relative">
               <input

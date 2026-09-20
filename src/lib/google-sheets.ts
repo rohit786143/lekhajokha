@@ -13,12 +13,36 @@ import { google, sheets_v4 } from "googleapis";
 
 let _sheetsClient: sheets_v4.Sheets | null = null;
 
+export const DEFAULT_SERVICE_ACCOUNT_EMAIL =
+  "lekhajokha-bot@lekhajokha-509206.iam.gserviceaccount.com";
+
+export function getServiceAccountEmail(): string {
+  const envEmail =
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+    process.env.NEXT_PUBLIC_GOOGLE_SERVICE_EMAIL;
+  if (
+    envEmail &&
+    !envEmail.includes("your-gcp-project") &&
+    !envEmail.includes("example.com") &&
+    !envEmail.includes("lekha-jokha-sync")
+  ) {
+    return envEmail.trim();
+  }
+  return DEFAULT_SERVICE_ACCOUNT_EMAIL;
+}
+
 export function isGoogleServiceAccountConfigured(): boolean {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const email = getServiceAccountEmail();
   const rawKey = process.env.GOOGLE_PRIVATE_KEY;
 
   if (!email || !rawKey) return false;
-  if (email.includes("your-gcp-project") || email.includes("example.com")) return false;
+  if (
+    email.includes("your-gcp-project") ||
+    email.includes("example.com") ||
+    email.includes("lekha-jokha-sync")
+  ) {
+    return false;
+  }
   if (rawKey.includes("YOUR_PRIVATE_KEY_HERE")) return false;
   if (!rawKey.includes("BEGIN PRIVATE KEY") && !rawKey.includes("BEGIN RSA PRIVATE KEY")) return false;
 
@@ -34,7 +58,7 @@ function getSheetsClient(): sheets_v4.Sheets {
     );
   }
 
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!;
+  const email = getServiceAccountEmail();
   const rawKey = process.env.GOOGLE_PRIVATE_KEY!;
 
   // Handle escaped newlines in env var

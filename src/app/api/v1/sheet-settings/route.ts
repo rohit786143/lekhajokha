@@ -5,6 +5,7 @@ import {
   extractSheetId,
   verifySheetAccess,
   invalidateSheetHeaderCache,
+  getServiceAccountEmail,
 } from "@/lib/google-sheets";
 
 const SheetSettingsSchema = z.object({
@@ -19,6 +20,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const tenantId = searchParams.get("tenantId") || "tenant-vyapar-01";
+    const serviceEmail = getServiceAccountEmail();
 
     try {
       const settings = await prisma.tenantSetting.findUnique({
@@ -30,12 +32,14 @@ export async function GET(req: NextRequest) {
         success: true,
         googleSheetId: settings?.googleSheetId || null,
         isConnected: !!settings?.googleSheetId,
+        serviceEmail,
       });
     } catch {
       return NextResponse.json({
         success: true,
         googleSheetId: null,
         isConnected: false,
+        serviceEmail,
       });
     }
   } catch (error: any) {
