@@ -30,7 +30,7 @@ export function GoogleSheetSync() {
 
   const serviceEmail =
     process.env.NEXT_PUBLIC_GOOGLE_SERVICE_EMAIL ||
-    "lekha-jokha-sync@your-gcp-project.iam.gserviceaccount.com";
+    "lekhajokha-bot@lekhajokha-509206.iam.gserviceaccount.com";
 
   const [sheetUrl, setSheetUrl] = useState("");
   const [status, setStatus] = useState<SheetStatus>({
