@@ -288,6 +288,17 @@ export function GoogleSheetSync() {
             <Shield className="w-3 h-3" />
             Service Account Bot Email (share your sheet with this)
           </label>
+          {serviceEmail.includes("your-gcp-project") && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                Setup Required: Google Service Account Not Configured
+              </p>
+              <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                The email below is a placeholder template. To enable live auto-sync, create a Service Account in Google Cloud Console, enable Google Sheets API, and set <code className="px-1 py-0.5 bg-amber-100 dark:bg-amber-900 rounded font-mono font-bold">GOOGLE_SERVICE_ACCOUNT_EMAIL</code> and <code className="px-1 py-0.5 bg-amber-100 dark:bg-amber-900 rounded font-mono font-bold">GOOGLE_PRIVATE_KEY</code> in your Vercel Environment Variables.
+              </p>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <div className="flex-1 relative">
               <input

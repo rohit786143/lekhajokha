@@ -63,19 +63,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Verify access — check service account can read the sheet
-    const verification = await verifySheetAccess(sheetId);
-    if (!verification.ok) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: verification.error,
-        },
-        { status: 403 }
-      );
-    }
-
-    // 3. Upsert TenantSetting with googleSheetId
+    // 2. Upsert TenantSetting with googleSheetId so the link is preserved
     try {
       await prisma.tenantSetting.upsert({
         where: { tenantId: validated.tenantId },
@@ -89,8 +77,23 @@ export async function POST(req: NextRequest) {
       console.warn("DB upsert fallback for sheet settings:", dbErr.message);
     }
 
+    // 3. Verify access — check service account can read the sheet
+    const verification = await verifySheetAccess(sheetId);
+    if (!verification.ok) {
+      return NextResponse.json({
+        success: true,
+        saved: true,
+        googleSheetId: sheetId,
+        isConnected: false,
+        warning: verification.error,
+        message: "Google Sheet URL saved successfully!",
+      });
+    }
+
     return NextResponse.json({
       success: true,
+      saved: true,
+      isConnected: true,
       message: "Google Sheet connected successfully!",
       googleSheetId: sheetId,
       sheetTitle: verification.title,

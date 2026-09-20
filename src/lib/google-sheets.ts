@@ -13,29 +13,45 @@ import { google, sheets_v4 } from "googleapis";
 
 let _sheetsClient: sheets_v4.Sheets | null = null;
 
-function getSheetsClient(): sheets_v4.Sheets {
-  if (_sheetsClient) return _sheetsClient;
-
+export function isGoogleServiceAccountConfigured(): boolean {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const rawKey = process.env.GOOGLE_PRIVATE_KEY;
 
-  if (!email || !rawKey) {
+  if (!email || !rawKey) return false;
+  if (email.includes("your-gcp-project") || email.includes("example.com")) return false;
+  if (rawKey.includes("YOUR_PRIVATE_KEY_HERE")) return false;
+  if (!rawKey.includes("BEGIN PRIVATE KEY") && !rawKey.includes("BEGIN RSA PRIVATE KEY")) return false;
+
+  return true;
+}
+
+function getSheetsClient(): sheets_v4.Sheets {
+  if (_sheetsClient) return _sheetsClient;
+
+  if (!isGoogleServiceAccountConfigured()) {
     throw new Error(
-      "Google Sheets credentials not configured. Set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in .env"
+      "Google Service Account credentials are not configured on the server. Please set real GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in environment variables."
     );
   }
+
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!;
+  const rawKey = process.env.GOOGLE_PRIVATE_KEY!;
 
   // Handle escaped newlines in env var
   const privateKey = rawKey.replace(/\\n/g, "\n");
 
-  const auth = new google.auth.JWT({
-    email,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+  try {
+    const auth = new google.auth.JWT({
+      email,
+      key: privateKey,
+      scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    });
 
-  _sheetsClient = google.sheets({ version: "v4", auth });
-  return _sheetsClient;
+    _sheetsClient = google.sheets({ version: "v4", auth });
+    return _sheetsClient;
+  } catch (err: any) {
+    throw new Error(`Google Authentication initialization failed: ${err?.message || "Invalid private key format"}`);
+  }
 }
 
 // ─── URL / ID Extraction ───────────────────────────────────────────────
@@ -73,7 +89,16 @@ export function extractSheetId(urlOrId: string): string | null {
  */
 export async function verifySheetAccess(
   sheetId: string
-): Promise<{ ok: boolean; title?: string; error?: string }> {
+): Promise<{ ok: boolean; title?: string; error?: string; isConfigured?: boolean }> {
+  if (!isGoogleServiceAccountConfigured()) {
+    return {
+      ok: false,
+      isConfigured: false,
+      error:
+        "Google Cloud Service Account credentials are not configured in Vercel environment variables yet.",
+    };
+  }
+
   try {
     const sheets = getSheetsClient();
     const response = await sheets.spreadsheets.get({
@@ -94,26 +119,39 @@ export async function verifySheetAccess(
     if (missingTabs.length > 0) {
       return {
         ok: true,
+        isConfigured: true,
         title,
-        error: `Connected! But missing tab(s): ${missingTabs.join(", ")}. Please create them manually.`,
+        error: `Connected! But missing tab(s): ${missingTabs.join(", ")}. Please create them in your Google Sheet.`,
       };
     }
 
-    return { ok: true, title };
+    return { ok: true, isConfigured: true, title };
   } catch (err: any) {
     const status = err?.response?.status || err?.code;
 
     if (status === 403 || status === 404) {
       return {
         ok: false,
+        isConfigured: true,
         error:
-          "Access denied. Please share the Google Sheet with the service account email as an Editor.",
+          "Access denied. Please share your Google Sheet with the bot email as an Editor.",
+      };
+    }
+
+    const msg = err?.message || "";
+    if (msg.includes("DECODER") || msg.includes("unsupported")) {
+      return {
+        ok: false,
+        isConfigured: false,
+        error:
+          "Invalid Google Private Key in server environment variables. Please paste the real RSA private key into Vercel.",
       };
     }
 
     return {
       ok: false,
-      error: `Connection failed: ${err.message || "Unknown error"}`,
+      isConfigured: true,
+      error: `Connection check failed: ${err.message || "Unknown error"}`,
     };
   }
 }
