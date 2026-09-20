@@ -269,6 +269,8 @@ export interface PaymentSplit {
 export interface InvoiceCalculations {
   subtotal: number;
   discountTotal: number;
+  billDiscountAmount?: number;
+  billDiscountPercent?: number;
   taxableAmount: number;
   cgst: number;
   sgst: number;

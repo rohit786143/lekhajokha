@@ -2,6 +2,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { UserRole } from "./types";
+import { INDIAN_STATES } from "./tax-engine";
 
 const prisma = new PrismaClient();
 
@@ -31,12 +32,13 @@ export async function createTenantInDb(data: {
     });
 
     // Automatically create the primary firm
+    const stateName = INDIAN_STATES[data.stateCode] || "State";
     const firm = await prisma.firm.create({
       data: {
         tenantId: tenant.id,
         name: data.name,
         stateCode: data.stateCode,
-        stateName: "State",
+        stateName,
         isPrimary: true,
       },
     });
@@ -87,7 +89,7 @@ export async function getTenantsFromDb() {
         legalName: t.legalName || t.name,
         gstin: t.gstin || "",
         stateCode: t.stateCode,
-        stateName: t.stateCode === "27" ? "Maharashtra" : "Other State",
+        stateName: INDIAN_STATES[t.stateCode] || (t.stateCode === "27" ? "Maharashtra" : "State"),
         plan: t.plan,
         subscriptionStatus: t.subscriptionStatus,
         subscriptionStart: t.subscriptionStart?.toISOString(),

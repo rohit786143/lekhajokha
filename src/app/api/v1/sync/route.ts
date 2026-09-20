@@ -404,31 +404,105 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4. Sync Products
+    // 4. Handle Deletions if requested
+    if (Array.isArray(body.deletedProductIds) && body.deletedProductIds.length > 0) {
+      await prisma.product.deleteMany({
+        where: {
+          tenantId,
+          id: { in: body.deletedProductIds },
+        },
+      }).catch(() => null);
+    }
+    if (body.clearAllProducts === true) {
+      await prisma.product.deleteMany({
+        where: { tenantId },
+      }).catch(() => null);
+    }
+
+    // 5. Sync Products (Insert new or update existing)
     if (Array.isArray(products) && products.length > 0) {
       for (const p of products) {
         if (!p.name) continue;
+
+        // Resolve valid category if available in DB
+        let validCategoryId: string | null = null;
+        if (p.categoryId || p.categoryName) {
+          const matchedCategory = await prisma.category.findFirst({
+            where: {
+              tenantId,
+              OR: [
+                ...(p.categoryId ? [{ id: p.categoryId }] : []),
+                ...(p.categoryName ? [{ name: p.categoryName }] : []),
+              ],
+            },
+          });
+          if (matchedCategory) {
+            validCategoryId = matchedCategory.id;
+          }
+        }
+
         const existing = await prisma.product.findFirst({
           where: { tenantId, OR: [{ id: p.id }, { sku: p.sku }] },
         });
+
         if (!existing) {
           await prisma.product.create({
             data: {
-              id: p.id?.startsWith("prod-") ? p.id : undefined,
+              id: p.id || undefined,
               tenantId,
               name: p.name,
               sku: p.sku || `SKU-${Date.now().toString().slice(-4)}`,
+              barcode: p.barcode || null,
+              categoryId: validCategoryId,
+              description: p.description || null,
               unit: p.unit || "PCS",
+              secondaryUnit: p.secondaryUnit || null,
+              conversionRate: Number(p.conversionRate) || 1.0,
               hsn: p.hsn || "9999",
               taxRate: Number(p.taxRate) || 18.0,
               isTaxInclusive: !!p.isTaxInclusive,
               salePrice: Number(p.salePrice) || 0,
               mrp: Number(p.mrp) || Number(p.salePrice) || 0,
               purchasePrice: Number(p.purchasePrice) || 0,
+              wholesalePrice: Number(p.wholesalePrice) || 0,
               currentStock: Number(p.currentStock) || 0,
-              minStock: Number(p.minStock) || 10,
+              minStock: Number(p.minStock) || 5,
+              trackBatch: !!p.trackBatch,
+              trackSerial: !!p.trackSerial,
             },
-          }).catch(() => null);
+          }).catch((err) => {
+            console.error("Failed to create product in sync:", err?.message);
+            return null;
+          });
+          syncedProductsCount++;
+        } else {
+          // Update product in DB so stock, prices, barcodes, and details sync accurately across all PCs
+          await prisma.product.update({
+            where: { id: existing.id },
+            data: {
+              name: p.name,
+              barcode: p.barcode || existing.barcode,
+              categoryId: validCategoryId || existing.categoryId,
+              description: p.description !== undefined ? p.description : existing.description,
+              unit: p.unit || existing.unit,
+              secondaryUnit: p.secondaryUnit !== undefined ? p.secondaryUnit : existing.secondaryUnit,
+              conversionRate: Number(p.conversionRate) || existing.conversionRate,
+              hsn: p.hsn || existing.hsn,
+              taxRate: Number(p.taxRate) ?? existing.taxRate,
+              isTaxInclusive: p.isTaxInclusive !== undefined ? !!p.isTaxInclusive : existing.isTaxInclusive,
+              salePrice: Number(p.salePrice) ?? existing.salePrice,
+              mrp: Number(p.mrp) ?? existing.mrp,
+              purchasePrice: Number(p.purchasePrice) ?? existing.purchasePrice,
+              wholesalePrice: Number(p.wholesalePrice) ?? existing.wholesalePrice,
+              currentStock: Number(p.currentStock) ?? existing.currentStock,
+              minStock: Number(p.minStock) ?? existing.minStock,
+              trackBatch: p.trackBatch !== undefined ? !!p.trackBatch : existing.trackBatch,
+              trackSerial: p.trackSerial !== undefined ? !!p.trackSerial : existing.trackSerial,
+            },
+          }).catch((err) => {
+            console.error("Failed to update product in sync:", err?.message);
+            return null;
+          });
           syncedProductsCount++;
         }
       }

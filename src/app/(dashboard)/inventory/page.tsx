@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
 import { usePosStore } from "@/lib/pos-store";
@@ -33,10 +33,18 @@ import {
 import { HsnSearchAutocomplete } from "@/components/ui/hsn-search-autocomplete";
 
 export default function InventoryPage() {
-  const { tenant, addCategory, addProduct, deleteProduct, clearAllInventory, inwardStock } = usePosStore();
+  const { tenant, addCategory, addProduct, deleteProduct, clearAllInventory, inwardStock, syncWithCloud, isSyncing } = usePosStore();
   const { products, categories } = useTenantData();
   const tenantProducts = products;
   const tenantCategories = categories;
+
+  // Auto-sync with cloud on mount to ensure all devices and incognito mode have latest inventory
+  useEffect(() => {
+    if (typeof syncWithCloud === "function") {
+      syncWithCloud().catch(() => {});
+    }
+  }, [tenant?.id, syncWithCloud]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);

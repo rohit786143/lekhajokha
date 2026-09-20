@@ -303,9 +303,20 @@ export async function POST(req: NextRequest) {
         calculatedCess += calculated.cess;
       }
 
-      // Apply Bill Discount & Round-Off
-      calculatedDiscountTotal += billDiscount;
-      calculatedTaxable = Math.max(0, calculatedTaxable - billDiscount);
+      // Apply Bill Discount (% of taxable amount) & Round-Off
+      const discountPercent = Math.min(100, Math.max(0, billDiscount));
+      const billDiscountAmount = round2((calculatedTaxable * discountPercent) / 100);
+
+      calculatedDiscountTotal += billDiscountAmount;
+      calculatedTaxable = Math.max(0, calculatedTaxable - billDiscountAmount);
+
+      if (discountPercent > 0) {
+        const taxFactor = (100 - discountPercent) / 100;
+        calculatedCgst = round2(calculatedCgst * taxFactor);
+        calculatedSgst = round2(calculatedSgst * taxFactor);
+        calculatedIgst = round2(calculatedIgst * taxFactor);
+        calculatedCess = round2(calculatedCess * taxFactor);
+      }
 
       const preRoundGrand =
         calculatedTaxable + calculatedCgst + calculatedSgst + calculatedIgst + calculatedCess;

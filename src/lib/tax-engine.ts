@@ -271,8 +271,20 @@ export function calculateCartSummary(
     totalQuantity += calculated.quantity;
   }
 
-  discountTotal += billDiscount;
-  taxableAmount = Math.max(0, taxableAmount - billDiscount);
+  // Bill discount is specified as percentage (%)
+  const discountPercent = Math.min(100, Math.max(0, Number(billDiscount) || 0));
+  const billDiscountAmount = round2((taxableAmount * discountPercent) / 100);
+
+  discountTotal += billDiscountAmount;
+  taxableAmount = Math.max(0, taxableAmount - billDiscountAmount);
+
+  if (discountPercent > 0) {
+    const taxFactor = (100 - discountPercent) / 100;
+    cgst = round2(cgst * taxFactor);
+    sgst = round2(sgst * taxFactor);
+    igst = round2(igst * taxFactor);
+    cess = round2(cess * taxFactor);
+  }
 
   const preRoundGrand = taxableAmount + cgst + sgst + igst + cess;
   let roundOff = 0;
@@ -289,6 +301,8 @@ export function calculateCartSummary(
   return {
     subtotal: round2(subtotal),
     discountTotal: round2(discountTotal),
+    billDiscountAmount,
+    billDiscountPercent: discountPercent,
     taxableAmount: round2(taxableAmount),
     cgst: round2(cgst),
     sgst: round2(sgst),

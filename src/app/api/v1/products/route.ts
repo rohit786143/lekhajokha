@@ -98,3 +98,33 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    const tenantId = searchParams.get("tenantId");
+    const clearAll = searchParams.get("clearAll") === "true";
+
+    if (!tenantId) {
+      return NextResponse.json({ success: false, error: "Tenant ID required" }, { status: 400 });
+    }
+
+    if (clearAll) {
+      await prisma.product.deleteMany({ where: { tenantId } });
+      return NextResponse.json({ success: true, message: "All inventory products deleted successfully" });
+    }
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: "Product ID required" }, { status: 400 });
+    }
+
+    await prisma.product.deleteMany({
+      where: { id, tenantId },
+    });
+
+    return NextResponse.json({ success: true, message: "Product deleted successfully" });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

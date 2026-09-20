@@ -46,7 +46,7 @@ import {
   INITIAL_TENANTS_REGISTRY,
   SUPER_ADMIN_USER,
 } from "./mock-data";
-import { calculateCartSummary, calculateLineItem, isInterStateTransaction } from "./tax-engine";
+import { calculateCartSummary, calculateLineItem, isInterStateTransaction, INDIAN_STATES } from "./tax-engine";
 import { parseVoiceCommand } from "./voice-parser";
 import { parseBarcode } from "./barcode-parser";
 import { INDUSTRY_TEMPLATES } from "./industry-templates";
@@ -319,7 +319,7 @@ export const usePosStore = create<PosState>()(
       },
 
       setPlaceOfSupply: (placeOfSupply) => set({ placeOfSupply }),
-      setBillDiscount: (billDiscount) => set({ billDiscount: Math.max(0, billDiscount) }),
+      setBillDiscount: (billDiscount) => set({ billDiscount: Math.min(100, Math.max(0, billDiscount)) }),
       toggleAutoRoundOff: () => set((state) => ({ autoRoundOff: !state.autoRoundOff })),
       
       setSaleType: (type) => {
@@ -749,17 +749,31 @@ export const usePosStore = create<PosState>()(
       },
 
       deleteProduct: (productId) => {
+        const tenantId = get().tenant.id || get().currentUser?.tenantId;
         set((state) => ({
           products: state.products.filter((p) => p.id !== productId),
           activeCartItems: state.activeCartItems.filter((it) => it.productId !== productId),
         }));
+
+        if (typeof window !== "undefined" && tenantId) {
+          fetch(`/api/v1/products?id=${encodeURIComponent(productId)}&tenantId=${encodeURIComponent(tenantId)}`, {
+            method: "DELETE",
+          }).catch((err) => console.warn("Failed to delete product from cloud:", err));
+        }
       },
 
       clearAllInventory: () => {
+        const tenantId = get().tenant.id || get().currentUser?.tenantId;
         set({
           products: [],
           activeCartItems: [],
         });
+
+        if (typeof window !== "undefined" && tenantId) {
+          fetch(`/api/v1/products?clearAll=true&tenantId=${encodeURIComponent(tenantId)}`, {
+            method: "DELETE",
+          }).catch((err) => console.warn("Failed to clear cloud inventory:", err));
+        }
       },
 
       inwardStock: (payload) => {
@@ -1608,7 +1622,7 @@ export const usePosStore = create<PosState>()(
                 legalName: dbTenant.legalName || dbTenant.name,
                 gstin: dbTenant.gstin || "UNREGISTERED",
                 stateCode: dbTenant.stateCode || "27",
-                stateName: dbTenant.stateCode === "27" ? "Maharashtra" : "State",
+                stateName: INDIAN_STATES[dbTenant.stateCode || "27"] || (dbTenant.stateCode === "27" ? "Maharashtra" : "State"),
                 phone: dbTenant.phone || tenantItem?.ownerPhone || tenant.phone,
                 email: dbTenant.email || cleanEmail,
                 address: dbTenant.address || (tenantItem ? `Main Commercial Hub, ${tenantItem.stateName}` : tenant.address),
@@ -1843,7 +1857,7 @@ export const usePosStore = create<PosState>()(
             legalName: dbTenant.legalName || dbTenant.name,
             gstin: dbTenant.gstin || "",
             stateCode: dbTenant.stateCode,
-            stateName: payload.stateName || "State",
+            stateName: payload.stateName || INDIAN_STATES[dbTenant.stateCode] || "State",
             ownerName: dbUser.name,
             ownerEmail: dbUser.email,
             ownerPhone: dbUser.phone || "",
@@ -1885,7 +1899,7 @@ export const usePosStore = create<PosState>()(
             legalName: payload.legalName || payload.businessName,
             gstin: payload.gstin ? payload.gstin.toUpperCase() : undefined,
             stateCode: payload.stateCode || "27",
-            stateName: payload.stateName || "Maharashtra",
+            stateName: payload.stateName || INDIAN_STATES[payload.stateCode || "27"] || "Maharashtra",
             phone: payload.ownerPhone || "+91 98200 00000",
             email: payload.ownerEmail.toLowerCase(),
             invoicePrefix: "INV",

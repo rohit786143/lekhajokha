@@ -783,16 +783,32 @@ export default function PosPage() {
                 <span className="font-mono font-semibold">{formatCurrency(calc.subtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px] items-center py-0.5">
-                <span>Bill Discount (₹):</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={billDiscount || ""}
-                  onChange={(e) => setBillDiscount(Number(e.target.value) || 0)}
-                  placeholder="₹0.00"
-                  className="w-24 px-1.5 py-0.5 text-right font-mono border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-indigo-500"
-                />
+                <div className="flex items-center gap-1.5">
+                  <span>Bill Discount (%):</span>
+                  {billDiscount > 0 && calc.billDiscountAmount !== undefined && calc.billDiscountAmount > 0 && (
+                    <span className="text-[10px] font-mono text-rose-600 dark:text-rose-400 font-semibold">
+                      (-{formatCurrency(calc.billDiscountAmount)})
+                    </span>
+                  )}
+                </div>
+                <div className="relative flex items-center">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={billDiscount || ""}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0;
+                      setBillDiscount(Math.min(100, Math.max(0, val)));
+                    }}
+                    placeholder="0"
+                    className="w-20 pr-5 pl-1.5 py-0.5 text-right font-mono border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-rose-600 dark:text-rose-400 focus:ring-1 focus:ring-indigo-500 font-bold"
+                  />
+                  <span className="absolute right-1.5 text-[11px] font-bold text-slate-400 pointer-events-none">
+                    %
+                  </span>
+                </div>
               </div>
               <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px]">
                 <span>Taxable Amount:</span>
