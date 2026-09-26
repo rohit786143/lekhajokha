@@ -33,6 +33,11 @@ export function useTenantData() {
     return itemTenantId === tenantId;
   };
 
+  const memoizedTenant = useMemo(
+    () => ({ ...tenant, id: tenantId }),
+    [tenant, tenantId]
+  );
+
   const tenantProducts = useMemo(
     () => products.filter((p) => matchesTenant(p.tenantId)),
     [products, tenantId]
@@ -85,7 +90,7 @@ export function useTenantData() {
 
   return {
     tenantId,
-    tenant: { ...tenant, id: tenantId },
+    tenant: memoizedTenant,
     firms: tenantFirms,
     activeFirmId,
     godowns,

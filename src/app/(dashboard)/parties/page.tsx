@@ -43,8 +43,8 @@ export default function PartiesPage() {
   const [type, setType] = useState<"CUSTOMER" | "VENDOR" | "BOTH">("CUSTOMER");
   const [stateCode, setStateCode] = useState(activeFirm.stateCode || "27");
   const [billingAddress, setBillingAddress] = useState("");
-  const [city, setCity] = useState("Mumbai");
-  const [pincode, setPincode] = useState("400001");
+  const [city, setCity] = useState(tenant?.city || "");
+  const [pincode, setPincode] = useState(activeFirm?.pincode || tenant?.pincode || "");
   const [creditLimit, setCreditLimit] = useState(50000);
   const [openingBalance, setOpeningBalance] = useState(0);
 

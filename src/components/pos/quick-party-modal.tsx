@@ -87,15 +87,15 @@ export function QuickPartyModal({
         setGstin("");
         setStateCode(defaultState);
         setBillingAddress("");
-        setCity(activeFirm?.stateName || tenant?.stateName || "Mumbai");
-        setPincode("400001");
+        setCity(tenant?.city || "");
+        setPincode(activeFirm?.pincode || tenant?.pincode || "");
         setSameAsBilling(true);
         setShippingAddress("");
         setCreditLimit(0);
       }
       setGstinError("");
     }
-  }, [isOpen, initialParty, defaultMode, defaultState, activeFirm, tenant]);
+  }, [isOpen, initialParty]);
 
   // Handle GSTIN Input with Auto State Extraction
   const handleGstinChange = (val: string) => {
