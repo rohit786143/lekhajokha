@@ -49,7 +49,14 @@ export function useTenantData() {
   );
 
   const tenantInvoices = useMemo(
-    () => invoices.filter((i) => matchesTenant(i.tenantId)),
+    () =>
+      invoices.filter(
+        (i) =>
+          matchesTenant(i.tenantId) &&
+          i.invoiceNo !== "TEST-4691" &&
+          i.id !== "TEST-4691" &&
+          !i.invoiceNo?.toUpperCase().includes("TEST-4691")
+      ),
     [invoices, tenantId]
   );
 
