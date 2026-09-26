@@ -28,13 +28,14 @@ import {
   QrCode,
   ArrowUpRight,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 
 type DatePreset = "ALL" | "TODAY" | "YESTERDAY" | "THIS_WEEK" | "THIS_MONTH" | "CUSTOM";
 
 export default function InvoicesRegisterPage() {
   const { invoices: tenantInvoices, tenant, firms } = useTenantData();
-  const { activeFirmId, getActiveFirm, syncWithCloud, isSyncing } = usePosStore();
+  const { activeFirmId, getActiveFirm, syncWithCloud, isSyncing, deleteInvoice } = usePosStore();
 
   React.useEffect(() => {
     if (typeof syncWithCloud === "function") {
@@ -650,6 +651,22 @@ export default function InvoicesRegisterPage() {
                           >
                             <Printer className="w-4 h-4" />
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete bill ${inv.invoiceNo}?`)) {
+                                deleteInvoice(inv.id);
+                                deleteInvoice(inv.invoiceNo);
+                                if (selectedInvoice?.id === inv.id || selectedInvoice?.invoiceNo === inv.invoiceNo) {
+                                  setSelectedInvoice(null);
+                                }
+                              }
+                            }}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-600 dark:text-rose-400 rounded-xl transition cursor-pointer"
+                            title="Delete Bill"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -707,6 +724,22 @@ export default function InvoicesRegisterPage() {
                     🧾 3-inch POS Slip
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete bill ${selectedInvoice.invoiceNo}?`)) {
+                      deleteInvoice(selectedInvoice.id);
+                      deleteInvoice(selectedInvoice.invoiceNo);
+                      setSelectedInvoice(null);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950 dark:hover:bg-rose-900 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-xl transition cursor-pointer"
+                  title="Delete Bill"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Delete</span>
+                </button>
 
                 <button
                   type="button"

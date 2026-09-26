@@ -26,6 +26,7 @@ import {
   Calendar,
   RotateCcw,
   Check,
+  Trash2,
 } from "lucide-react";
 
 export default function DashboardHomePage() {
@@ -35,6 +36,7 @@ export default function DashboardHomePage() {
     activeFirmId,
     setActiveFirmId,
     getActiveFirm,
+    deleteInvoice,
   } = usePosStore();
   const {
     invoices: tenantInvoices,
@@ -280,17 +282,36 @@ export default function DashboardHomePage() {
                         </span>
                       </td>
                       <td className="p-3 text-center">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPreviewInvoice(inv);
-                          }}
-                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded-lg transition cursor-pointer"
-                          title="Print / View Bill"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewInvoice(inv);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded-lg transition cursor-pointer"
+                            title="Print / View Bill"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Are you sure you want to delete bill ${inv.invoiceNo}?`)) {
+                                deleteInvoice(inv.id);
+                                deleteInvoice(inv.invoiceNo);
+                                if (previewInvoice?.id === inv.id || previewInvoice?.invoiceNo === inv.invoiceNo) {
+                                  setPreviewInvoice(null);
+                                }
+                              }
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 rounded-lg transition cursor-pointer"
+                            title="Delete Bill"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -411,6 +432,21 @@ export default function DashboardHomePage() {
                     A4 GST Invoice
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete bill ${previewInvoice.invoiceNo}?`)) {
+                      deleteInvoice(previewInvoice.id);
+                      deleteInvoice(previewInvoice.invoiceNo);
+                      setPreviewInvoice(null);
+                    }
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-950/60 rounded-xl transition cursor-pointer"
+                  title="Delete Bill"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Bill</span>
+                </button>
                 <button
                   onClick={() => setPreviewInvoice(null)}
                   className="px-4 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl"

@@ -212,6 +212,9 @@ interface PosState {
   addPurchaseInvoice: (purchase: PurchaseInvoice) => void;
   deletePurchaseInvoice: (id: string) => void;
 
+  // Invoice Actions
+  deleteInvoice: (invoiceIdOrNo: string) => void;
+
   // Quotation Actions
   addQuotation: (quotation: Quotation) => void;
   updateQuotation: (quotation: Quotation) => void;
@@ -1409,6 +1412,14 @@ export const usePosStore = create<PosState>()(
         });
 
         return newInvoice;
+      },
+
+      deleteInvoice: (invoiceIdOrNo: string) => {
+        const { invoices } = get();
+        const filtered = invoices.filter(
+          (i) => i.id !== invoiceIdOrNo && i.invoiceNo !== invoiceIdOrNo
+        );
+        set({ invoices: filtered });
       },
 
       addCreditNote: (creditNote) => {
